@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="studio">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Apex Metronome Studio</title>
+  <meta name="theme-color" content="#064e3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Screen Flash Effect Overlay for Visual Practice -->
+  <div id="flashOverlay" class="screen-flash-overlay"></div>
+
+  <!-- Header Navbar -->
+  <header class="app-header">
+    <div class="brand-title">
+      <span class="brand-icon">⏱️</span>
+      <span>Apex Metronome Studio</span>
+    </div>
+    <div class="header-actions">
+      <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
+        <label for="themeSelect" style="font-size: 0.8rem;">Theme:</label>
+        <select id="themeSelect" class="custom-select" style="padding: 6px 10px;">
+          <option value="studio" selected>Studio Emerald</option>
+          <option value="dark">Dark Cyber</option>
+          <option value="vintage">Vintage Wood</option>
+          <option value="light">Studio Light</option>
+        </select>
+      </div>
+      <button id="btnOpenHelp" class="btn-bump">?</button>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="main-container">
+
+    <!-- Left Column: Primary Metronome Controls & Visualizer -->
+    <section class="glass-panel">
+      
+      <!-- Tempo Display Header -->
+      <div class="tempo-display-wrapper">
+        <div id="tempoBadge" class="tempo-term-badge">Allegro</div>
+        <div class="tempo-number-box">
+          <input type="number" id="bpmInput" class="bpm-input" value="120" min="20" max="300">
+          <span class="bpm-label">BPM</span>
+        </div>
+
+        <!-- Scroll-Wheel Responsive Tempo Slider (Fine bump buttons removed) -->
+        <div class="bpm-slider-container" style="width: 85%; margin: 8px auto 4px auto;">
+          <input type="range" id="bpmSlider" min="20" max="300" value="120">
+        </div>
+        
+        <!-- Consolidated Time Displays Below BPM -->
+        <div id="mainStatusBar" style="font-size: 1.15rem; font-weight: 800; color: var(--accent-secondary); margin-top: 4px; letter-spacing: 0.5px; transition: color 0.1s linear;">
+          Bar: 1 • 00:00
+        </div>
+        <div id="mainSessionTimerDisplay" style="font-size: 0.85rem; font-weight: 600; color: var(--accent-primary); margin-top: 2px;">
+          Session Timer: --:--
+        </div>
+      </div>
+
+      <!-- Swinging Pendulum Canvas -->
+      <div class="visual-section">
+        <canvas id="pendulumCanvas" width="480" height="220"></canvas>
+      </div>
+
+      <!-- Main Action Buttons (START / STOP, PAUSE / RESUME, TAP TEMPO) -->
+      <div class="primary-actions-bar" style="grid-template-columns: 1.2fr 1fr 1fr;">
+        <button id="btnPlayMaster" class="btn-play-master">
+          <span id="playIcon">▶</span> <span id="playText">START</span>
+        </button>
+        <button id="btnPauseMaster" class="btn-action-lg" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24;" disabled>
+          <span id="pauseIcon">⏸</span> <span id="pauseText">PAUSE</span>
+        </button>
+        <button id="btnTapTempo" class="btn-action-lg">TAP TEMPO</button>
+      </div>
+
+      <!-- Interactive Beat Grid & Accent Controls -->
+      <div class="beat-grid-wrapper">
+        <div class="grid-title-row">
+          <span style="font-weight: 700; font-size: 0.95rem;">ACCENT PATTERN GRID</span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Click beat to cycle: Accent ➔ Normal ➔ Weak ➔ Mute</span>
+        </div>
+        <div id="beatGrid" class="beat-grid"></div>
+      </div>
+
+      <!-- Metronome Dropdown Settings -->
+      <div class="controls-grid">
+        <div class="control-group">
+          <label>Time Signature</label>
+          <select id="timeSignatureSelect" class="custom-select">
+            <option value="1">1/4 (Single Beat)</option>
+            <option value="2">2/4 (March)</option>
+            <option value="3">3/4 (Waltz)</option>
+            <option value="4" selected>4/4 (Common)</option>
+            <option value="5">5/4 (Take Five)</option>
+            <option value="6">6/8 (Compound Dual)</option>
+            <option value="7">7/8 (Odd Meter)</option>
+            <option value="9">9/8 (Triple Compound)</option>
+            <option value="12">12/8 (Blues / Ballad)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Subdivision</label>
+          <select id="subdivisionSelect" class="custom-select">
+            <option value="1" selected>Quarter Notes (1x)</option>
+            <option value="2">Eighth Notes (2x)</option>
+            <option value="3">Triplets (3x)</option>
+            <option value="4">Sixteenth Notes (4x)</option>
+            <option value="6">Sextuplets (6x)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Sound Sample Set</label>
+          <select id="soundSetSelect" class="custom-select">
+            <option value="woodblock" selected>Classic Woodblock</option>
+            <option value="beep">Digital Beep</option>
+            <option value="cowbell">Percussion Cowbell</option>
+            <option value="drumkit">Acoustic Drumkit</option>
+            <option value="marimba">Warm Marimba</option>
+            <option value="pingpong">Ping-Pong Click</option>
+          </select>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Column: Specialized Practice & Trainer Tools -->
+    <aside class="sidebar-panel">
+
+      <!-- Navigation Tabs: Presets Tab placed directly after Trainers -->
+      <div class="tab-nav">
+        <button id="btnTabTrainers" class="tab-btn active" data-tab="tabTrainers">Trainers</button>
+        <button id="btnTabPresets" class="tab-btn" data-tab="tabPresets">Presets</button>
+        <button id="btnTabPolyrhythm" class="tab-btn" data-tab="tabPolyrhythm">Polyrhythm</button>
+        <button id="btnTabMixer" class="tab-btn" data-tab="tabMixer">Mixer</button>
+        <button id="btnTabTools" class="tab-btn" data-tab="tabTools">Tools</button>
+      </div>
+
+      <!-- Tab 1: Practice Trainers (Gap / Ramp / Timer Setup / Master Volume Bar) -->
+      <div id="tabTrainers" class="tab-content active glass-panel">
+        
+        <!-- Mute / Gap Trainer -->
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 2px;">
+            <h3><span>🎯</span> Mute / Gap Trainer</h3>
+            <label class="switch">
+              <input type="checkbox" id="gapTrainerToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <div class="controls-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="control-group">
+              <label>Bars Played</label>
+              <input type="number" id="barsPlayedInput" class="custom-input" value="1" min="1" max="64">
+            </div>
+            <div class="control-group">
+              <label>Bars Muted</label>
+              <input type="number" id="barsMutedInput" class="custom-input" value="3" min="1" max="64">
+            </div>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+
+        <!-- Independent Tempo Ramp -->
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 2px;">
+            <h3><span>📈</span> Independent Tempo Ramp</h3>
+            <label class="switch">
+              <input type="checkbox" id="tempoRampToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+
+          <!-- Ramp Mode & Total Duration Side-by-Side Row -->
+          <div class="controls-grid" style="grid-template-columns: 1fr 1fr; margin-top: 4px;">
+            <div class="control-group">
+              <label>Ramp Mode</label>
+              <select id="rampModeSelect" class="custom-select">
+                <option value="bars">Bars</option>
+                <option value="time" selected>Timer</option>
+              </select>
+            </div>
+
+            <!-- Total Duration Input (Beside Ramp Mode when Timer selected) -->
+            <div id="rampTotalTimeContainer" class="control-group" style="display: flex;">
+              <label>Total Limit (Min)</label>
+              <input type="number" id="rampTotalMinInput" class="custom-input" value="5" min="1" max="180">
+            </div>
+          </div>
+
+          <!-- Start & End/Max BPM Inputs -->
+          <div class="controls-grid" style="grid-template-columns: 1fr 1fr; margin-top: 4px;">
+            <div class="control-group">
+              <label>Start BPM</label>
+              <input type="number" id="rampStartBpmInput" class="custom-input" value="100" min="20" max="300">
+            </div>
+            <div class="control-group">
+              <label>End / Max BPM</label>
+              <input type="number" id="rampTargetBpmInput" class="custom-input" value="135" min="20" max="300">
+            </div>
+          </div>
+
+          <!-- Dynamic Bar Controls -->
+          <div id="rampBarControls" class="controls-grid" style="grid-template-columns: 1fr 1fr; margin-top: 4px; display: none;">
+            <div class="control-group">
+              <label>Increment BPM</label>
+              <input type="number" id="rampIncInput" class="custom-input" value="5" min="1" max="50">
+            </div>
+            <div class="control-group">
+              <label>Every N Bars</label>
+              <input type="number" id="rampEveryBarsInput" class="custom-input" value="4" min="1" max="64">
+            </div>
+          </div>
+
+          <!-- Dynamic Time Controls -->
+          <div id="rampTimeControls" class="controls-grid" style="grid-template-columns: 1fr 1fr; margin-top: 4px; display: grid;">
+            <div class="control-group">
+              <label>Inc BPM per Step</label>
+              <input type="number" id="rampTimeIncInput" class="custom-input" value="10" min="1" max="50">
+            </div>
+            <div class="control-group">
+              <label>Every N Minutes</label>
+              <input type="number" id="rampEveryMinInput" class="custom-input" value="1" min="1" max="60">
+            </div>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+
+        <!-- Session Countdown Setup Selector -->
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 4px;">
+            <h3><span>⏳</span> Session Limit Setup</h3>
+            <select id="sessionTimerPreset" class="custom-select" style="width: auto; padding: 4px 8px;">
+              <option value="0">Off (Continuous)</option>
+              <option value="60">1 Minute</option>
+              <option value="120">2 Minutes</option>
+              <option value="180">3 Minutes</option>
+              <option value="240">4 Minutes</option>
+              <option value="300" selected>5 Minutes</option>
+              <option value="600">10 Minutes</option>
+              <option value="900">15 Minutes</option>
+              <option value="1200">20 Minutes</option>
+              <option value="1500">25 Minutes</option>
+              <option value="1800">30 Minutes</option>
+            </select>
+          </div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+
+        <!-- Scroll-Wheel Master Volume Bar at Bottom of Sidebar -->
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 4px;">
+            <h3><span>🔊</span> Master Volume</h3>
+            <span id="valMasterSidebar" style="font-weight: 800; color: var(--accent-primary); font-size: 1rem;">80%</span>
+          </div>
+          <div class="bpm-slider-container">
+            <input type="range" id="volMasterSidebar" min="0" max="100" value="80" style="width: 100%;">
+          </div>
+          <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px;">
+            💡 Scroll mouse wheel over volume or tempo slider to adjust!
+          </span>
+        </div>
+
+      </div>
+
+      <!-- Tab 2: Presets (Placed right after Trainers in main tab menu) -->
+      <div id="tabPresets" class="tab-content glass-panel">
+        <div class="tool-card">
+          <h3><span>💾</span> Preset Manager</h3>
+          <div class="controls-grid" style="grid-template-columns: 2fr 1fr; margin-top: 6px;">
+            <input type="text" id="presetNameInput" class="custom-input" placeholder="Preset Name (e.g. Speed Ladders)...">
+            <button id="btnSavePreset" class="btn-bump" style="background: var(--accent-primary); color: #000;">Save</button>
+          </div>
+          <div id="presetList" class="preset-list" style="margin-top: 10px; max-height: 380px;"></div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Polyrhythm Generator -->
+      <div id="tabPolyrhythm" class="tab-content glass-panel">
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 2px;">
+            <h3><span>🌀</span> Dual Polyrhythm Generator</h3>
+            <label class="switch">
+              <input type="checkbox" id="polyToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <div class="control-group">
+            <label>Polyrhythm Ratio (Counter-Beats)</label>
+            <select id="polyBeatsSelect" class="custom-select">
+              <option value="2">2 Beats against measure</option>
+              <option value="3" selected>3 Beats against measure (e.g. 3:4)</option>
+              <option value="4">4 Beats against measure (e.g. 4:3)</option>
+              <option value="5">5 Beats against measure (e.g. 5:4)</option>
+              <option value="7">7 Beats against measure</option>
+            </select>
+          </div>
+          <div id="polyGrid" class="beat-grid" style="margin-top: 15px;"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Volume Mixer & Feel Controls -->
+      <div id="tabMixer" class="tab-content glass-panel">
+        <div class="tool-card">
+          <h3><span>🎚️</span> Sound Volume Mixer</h3>
+          
+          <div class="mixer-row">
+            <span class="mixer-label">Master</span>
+            <input type="range" id="volMaster" min="0" max="100" value="80">
+            <span id="valMaster" class="mixer-val">80%</span>
+          </div>
+
+          <div class="mixer-row">
+            <span class="mixer-label">Accent</span>
+            <input type="range" id="volAccent" min="0" max="100" value="100">
+            <span id="valAccent" class="mixer-val">100%</span>
+          </div>
+
+          <div class="mixer-row">
+            <span class="mixer-label">Normal Beat</span>
+            <input type="range" id="volBeat" min="0" max="100" value="70">
+            <span id="valBeat" class="mixer-val">70%</span>
+          </div>
+
+          <div class="mixer-row">
+            <span class="mixer-label">Subdivisions</span>
+            <input type="range" id="volSub" min="0" max="100" value="40">
+            <span id="valSub" class="mixer-val">40%</span>
+          </div>
+
+          <div class="mixer-row">
+            <span class="mixer-label">Polyrhythm</span>
+            <input type="range" id="volPoly" min="0" max="100" value="60">
+            <span id="valPoly" class="mixer-val">60%</span>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid var(--border-color); margin: 12px 0;">
+
+          <h3><span>🎷</span> Swing & Shuffle Feel</h3>
+          <div class="mixer-row">
+            <span class="mixer-label">Swing Feel</span>
+            <input type="range" id="swingSlider" min="50" max="75" value="50">
+            <span id="valSwing" class="mixer-val">50%</span>
+          </div>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            50% = Straight, 66% = Triplet Swing, 75% = Hard Shuffle
+          </span>
+        </div>
+      </div>
+
+      <!-- Tab 5: Instruments & Drone Tool -->
+      <div id="tabTools" class="tab-content glass-panel">
+        <div class="tool-card">
+          <div class="toggle-row" style="margin-bottom: 2px;">
+            <h3><span>🎵</span> Continuous Tuning Pitch Drone</h3>
+            <label class="switch">
+              <input type="checkbox" id="droneToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <div class="controls-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="control-group">
+              <label>Note Pitch</label>
+              <select id="droneNoteSelect" class="custom-select">
+                <option value="440">A4 (440 Hz)</option>
+                <option value="466.16">A#4 / Bb4</option>
+                <option value="493.88">B4</option>
+                <option value="261.63">C4 (Middle C)</option>
+                <option value="277.18">C#4 / Db4</option>
+                <option value="293.66">D4</option>
+                <option value="311.13">D#4 / Eb4</option>
+                <option value="329.63">E4</option>
+                <option value="349.23">F4</option>
+                <option value="369.99">F#4 / Gb4</option>
+                <option value="392.00">G4</option>
+                <option value="415.30">G#4 / Ab4</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label>A4 Calibration</label>
+              <input type="number" id="droneCalibInput" class="custom-input" value="440" min="415" max="466">
+            </div>
+          </div>
+          
+          <div class="toggle-row" style="margin-top: 15px;">
+            <span>Screen Visual Flash Pulse</span>
+            <label class="switch">
+              <input type="checkbox" id="screenFlashToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- Footer Keyboard Helpers -->
+  <footer class="app-footer">
+    <div>Apex Metronome Studio • Standalone Offline Web App</div>
+    <div class="hotkey-list">
+      <span><span class="kbd-badge">Space</span> Start/Stop</span>
+      <span><span class="kbd-badge">P</span> Pause/Resume</span>
+      <span><span class="kbd-badge">T</span> Tap Tempo</span>
+      <span><span class="kbd-badge">Scroll</span> BPM / Vol</span>
+      <span><span class="kbd-badge">Shift+Scroll</span> BPM +/-5</span>
+      <span><span class="kbd-badge">M</span> Mute</span>
+    </div>
+  </footer>
+
+  <!-- Documentation Modal -->
+  <div id="modalHelp" class="modal-overlay">
+    <div class="modal-body">
+      <div class="modal-header">
+        <div class="modal-title">User Manual & Shortcuts</div>
+        <button id="btnCloseHelp" class="btn-close-modal">✕</button>
+      </div>
+      <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 10px;">
+        <p><strong>🎯 Mute / Gap Trainer:</strong> Mutes designated bars during playback (e.g., 3 played, 1 muted) to improve internal rhythm stability.</p>
+        <p><strong>📈 Independent Tempo Ramp:</strong> Set custom Start BPM and End BPM. Choose Bar mode or Time mode (e.g., +10 BPM every 1 min till 5 min)!</p>
+        <p><strong>⏸️ Pause / Resume:</strong> Click PAUSE (or press key 'P') to freeze your practice/routine at any moment and RESUME right where you left off!</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Attach JavaScript Engine & Controllers -->
+  <script src="metronome.js"></script>
+  <script>
+    // --- UI Controller & Event Binding ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // Elements
+      const bpmInput = document.getElementById('bpmInput');
+      const bpmSlider = document.getElementById('bpmSlider');
+      const tempoBadge = document.getElementById('tempoBadge');
+      const mainStatusBar = document.getElementById('mainStatusBar');
+      const mainSessionTimerDisplay = document.getElementById('mainSessionTimerDisplay');
+      const btnPlayMaster = document.getElementById('btnPlayMaster');
+      const playIcon = document.getElementById('playIcon');
+      const playText = document.getElementById('playText');
+      const btnPauseMaster = document.getElementById('btnPauseMaster');
+      const pauseIcon = document.getElementById('pauseIcon');
+      const pauseText = document.getElementById('pauseText');
+      const btnTapTempo = document.getElementById('btnTapTempo');
+      const beatGrid = document.getElementById('beatGrid');
+      const polyGrid = document.getElementById('polyGrid');
+      const timeSignatureSelect = document.getElementById('timeSignatureSelect');
+      const subdivisionSelect = document.getElementById('subdivisionSelect');
+      const soundSetSelect = document.getElementById('soundSetSelect');
+      const canvas = document.getElementById('pendulumCanvas');
+      const ctx = canvas.getContext('2d');
+      const flashOverlay = document.getElementById('flashOverlay');
+      const screenFlashToggle = document.getElementById('screenFlashToggle');
+
+      let currentDisplayBar = 1;
+      let currentDisplayMuteState = false;
+
+      function formatMMSS(seconds) {
+        if (seconds <= 0) return "--:--";
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      }
+
+      // Synchronized update of ALL Time Displays below BPM in Main Panel
+      function updateMainStatusBar(explicitBar = null, explicitMuteState = null) {
+        if (metronome.isPaused) {
+          mainStatusBar.textContent = `Bar: ${currentDisplayBar} [PAUSED] • ${formatMMSS(metronome.practiceElapsedSec || 0)}`;
+          mainStatusBar.style.color = '#f59e0b';
+          return;
+        }
+
+        if (metronome.inRoutineBreak) {
+          mainStatusBar.textContent = `Break ${metronome.routineRunCount}: ${formatMMSS(metronome.routineBreakRemaining)}`;
+          mainStatusBar.style.color = '#f59e0b'; // Vibrant Orange during breaks
+          return;
+        }
+
+        if (explicitBar !== null) currentDisplayBar = explicitBar;
+        if (explicitMuteState !== null) currentDisplayMuteState = explicitMuteState;
+
+        const timeFormatted = formatMMSS(metronome.practiceElapsedSec || 0);
+        mainStatusBar.textContent = `Bar: ${currentDisplayBar} • ${timeFormatted === '--:--' ? '00:00' : timeFormatted}`;
+
+        if (metronome.gapTrainerEnabled && currentDisplayMuteState) {
+          mainStatusBar.style.color = '#fbbf24'; // Rich Golden Yellow when bar is muted
+        } else {
+          mainStatusBar.style.color = 'var(--accent-secondary)'; // Emerald Green when played
+        }
+      }
+
+      // Sync Tempo Inputs
+      function updateTempoUI(tempo) {
+        bpmInput.value = tempo;
+        bpmSlider.value = tempo;
+        tempoBadge.textContent = getTempoMarking(tempo);
+      }
+
+      bpmInput.addEventListener('change', () => metronome.setTempo(parseInt(bpmInput.value, 10)));
+      bpmSlider.addEventListener('input', () => metronome.setTempo(parseInt(bpmSlider.value, 10)));
+
+      window.addEventListener('tempo-changed', (e) => updateTempoUI(e.detail.tempo));
+
+      // Scroll-Wheel on Tempo Slider and BPM Main Area
+      const tempoScrollHandler = (e) => {
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        const delta = e.deltaY < 0 ? step : -step;
+        metronome.setTempo(metronome.tempo + delta);
+      };
+      bpmSlider.addEventListener('wheel', tempoScrollHandler, { passive: false });
+      bpmInput.addEventListener('wheel', tempoScrollHandler, { passive: false });
+
+      // Play / Pause / Resume Master Control Handlers
+      btnPlayMaster.addEventListener('click', () => {
+        if (metronome.isPaused) {
+          metronome.resume();
+        } else {
+          const isPlaying = metronome.toggle();
+          if (!isPlaying) {
+            currentDisplayBar = 1;
+            currentDisplayMuteState = false;
+          }
+        }
+        updateMainStatusBar();
+      });
+
+      btnPauseMaster.addEventListener('click', () => {
+        if (metronome.isPaused) {
+          metronome.resume();
+        } else {
+          metronome.pause();
+        }
+        updateMainStatusBar();
+      });
+
+      window.addEventListener('metronome-state-changed', (e) => {
+        const { isPlaying, isPaused } = e.detail;
+        btnPlayMaster.classList.toggle('playing', isPlaying || isPaused);
+        playIcon.textContent = isPlaying || isPaused ? '⏹' : '▶';
+        playText.textContent = isPlaying || isPaused ? 'STOP' : 'START';
+
+        btnPauseMaster.disabled = !isPlaying && !isPaused;
+        if (isPaused) {
+          pauseIcon.textContent = '▶';
+          pauseText.textContent = 'RESUME';
+          btnPauseMaster.style.background = 'rgba(52, 211, 153, 0.2)';
+          btnPauseMaster.style.borderColor = '#34d399';
+          btnPauseMaster.style.color = '#34d399';
+        } else {
+          pauseIcon.textContent = '⏸';
+          pauseText.textContent = 'PAUSE';
+          btnPauseMaster.style.background = 'rgba(245, 158, 11, 0.15)';
+          btnPauseMaster.style.borderColor = '#f59e0b';
+          btnPauseMaster.style.color = '#fbbf24';
+        }
+      });
+
+      // Tap Tempo
+      btnTapTempo.addEventListener('click', () => metronome.tap());
+
+      // Time Signature & Grid Rendering
+      function renderBeatGrid() {
+        beatGrid.innerHTML = '';
+        metronome.beatAccents.forEach((state, idx) => {
+          const node = document.createElement('div');
+          node.className = 'beat-node';
+          node.setAttribute('data-state', state);
+          node.setAttribute('data-index', idx);
+          
+          let icon = '●';
+          if (state === 'accent') icon = '⚡';
+          if (state === 'weak') icon = '◦';
+          if (state === 'mute') icon = '✕';
+
+          node.innerHTML = `<span class="beat-num">${idx + 1}</span><span class="beat-icon">${icon}</span>`;
+
+          node.addEventListener('click', () => {
+            const nextStateMap = { 'accent': 'normal', 'normal': 'weak', 'weak': 'mute', 'mute': 'accent' };
+            metronome.beatAccents[idx] = nextStateMap[state];
+            renderBeatGrid();
+          });
+
+          beatGrid.appendChild(node);
+        });
+      }
+
+      function renderPolyGrid() {
+        polyGrid.innerHTML = '';
+        for (let i = 0; i < metronome.polyBeats; i++) {
+          const node = document.createElement('div');
+          node.className = 'beat-node';
+          node.style.borderColor = 'var(--beat-poly)';
+          node.innerHTML = `<span class="beat-num">P${i + 1}</span><span class="beat-icon">◆</span>`;
+          polyGrid.appendChild(node);
+        }
+      }
+
+      timeSignatureSelect.addEventListener('change', (e) => {
+        metronome.setBeatsPerMeasure(e.target.value);
+        renderBeatGrid();
+      });
+
+      subdivisionSelect.addEventListener('change', (e) => {
+        metronome.subdivision = parseInt(e.target.value, 10);
+      });
+
+      soundSetSelect.addEventListener('change', (e) => {
+        metronome.soundSet = e.target.value;
+      });
+
+      // Initial Render
+      metronome.setBeatsPerMeasure(4);
+      renderBeatGrid();
+      renderPolyGrid();
+      updateMainStatusBar(1, false);
+
+      // Audio Tick Event Handlers - Update Bar number AND color SIMULTANEOUSLY on Beat 1 of new bar
+      window.addEventListener('metronome-tick', (e) => {
+        const { beat, subStep, accentState, isBarMuted, measureCount } = e.detail;
+
+        const nodes = beatGrid.children;
+        Array.from(nodes).forEach((n, idx) => {
+          n.classList.toggle('active-now', idx === beat && subStep === 0);
+        });
+
+        if (beat === 0 && subStep === 0) {
+          updateMainStatusBar(measureCount, isBarMuted);
+        }
+
+        if (screenFlashToggle.checked && subStep === 0 && !isBarMuted) {
+          flashOverlay.className = `screen-flash-overlay ${accentState === 'accent' ? 'flash-active-accent' : 'flash-active-beat'}`;
+          setTimeout(() => flashOverlay.className = 'screen-flash-overlay', 80);
+        }
+      });
+
+      window.addEventListener('poly-tick', (e) => {
+        const { polyBeat } = e.detail;
+        const nodes = polyGrid.children;
+        Array.from(nodes).forEach((n, idx) => {
+          n.classList.toggle('active-now', idx === polyBeat);
+        });
+      });
+
+      window.addEventListener('practice-stopwatch-update', () => {
+        updateMainStatusBar();
+      });
+
+      // Routine Break Event Handlers for Full Leg & Full Hand
+      window.addEventListener('routine-break-start', () => updateMainStatusBar());
+      window.addEventListener('routine-break-update', () => updateMainStatusBar());
+      window.addEventListener('routine-break-end', () => updateMainStatusBar(1, false));
+
+      // --- Session Countdown Event Binding ---
+      const sessionTimerPreset = document.getElementById('sessionTimerPreset');
+      sessionTimerPreset.addEventListener('change', (e) => {
+        const secs = parseInt(e.target.value, 10);
+        metronome.setSessionTimerDuration(secs);
+        mainSessionTimerDisplay.textContent = `Session Limit: ${formatMMSS(secs)}`;
+      });
+
+      window.addEventListener('session-timer-update', (e) => {
+        mainSessionTimerDisplay.textContent = `Session Limit: ${formatMMSS(e.detail.remaining)}`;
+      });
+
+      window.addEventListener('session-timer-complete', () => {
+        mainSessionTimerDisplay.textContent = "Session Limit: DONE! 🎉";
+        btnPlayMaster.classList.remove('playing');
+        playIcon.textContent = '▶';
+        playText.textContent = 'START';
+        alert("🎉 Practice Session Complete!");
+      });
+
+      // --- Sidebar Master Volume Bar & Scroll-Wheel Sync ---
+      const volMasterSidebar = document.getElementById('volMasterSidebar');
+      const valMasterSidebar = document.getElementById('valMasterSidebar');
+      const volMasterMixer = document.getElementById('volMaster');
+      const valMasterMixer = document.getElementById('valMaster');
+
+      function syncMasterVolumeUI(val) {
+        metronome.masterVolume = val / 100;
+        volMasterSidebar.value = val;
+        valMasterSidebar.textContent = `${val}%`;
+        volMasterMixer.value = val;
+        valMasterMixer.textContent = `${val}%`;
+      }
+
+      volMasterSidebar.addEventListener('input', () => syncMasterVolumeUI(volMasterSidebar.value));
+      volMasterMixer.addEventListener('input', () => syncMasterVolumeUI(volMasterMixer.value));
+
+      // Scroll-Wheel on Master Volume Bar
+      const volumeScrollHandler = (e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 2 : -2;
+        const newVal = Math.min(Math.max(parseInt(volMasterSidebar.value, 10) + delta, 0), 100);
+        syncMasterVolumeUI(newVal);
+      };
+      volMasterSidebar.addEventListener('wheel', volumeScrollHandler, { passive: false });
+
+      // --- Tempo Ramp Controls & Event Binding ---
+      const tempoRampToggle = document.getElementById('tempoRampToggle');
+      const rampModeSelect = document.getElementById('rampModeSelect');
+      const rampStartBpmInput = document.getElementById('rampStartBpmInput');
+      const rampTargetBpmInput = document.getElementById('rampTargetBpmInput');
+      const rampIncInput = document.getElementById('rampIncInput');
+      const rampEveryBarsInput = document.getElementById('rampEveryBarsInput');
+      const rampBarControls = document.getElementById('rampBarControls');
+      const rampTimeControls = document.getElementById('rampTimeControls');
+      const rampTotalTimeContainer = document.getElementById('rampTotalTimeContainer');
+
+      const rampTimeIncInput = document.getElementById('rampTimeIncInput');
+      const rampEveryMinInput = document.getElementById('rampEveryMinInput');
+      const rampTotalMinInput = document.getElementById('rampTotalMinInput');
+
+      tempoRampToggle.addEventListener('change', (e) => {
+        metronome.tempoRampEnabled = e.target.checked;
+      });
+
+      rampModeSelect.addEventListener('change', (e) => {
+        metronome.rampMode = e.target.value;
+        const isTimeMode = e.target.value === 'time';
+        rampBarControls.style.display = isTimeMode ? 'none' : 'grid';
+        rampTimeControls.style.display = isTimeMode ? 'grid' : 'none';
+        rampTotalTimeContainer.style.display = isTimeMode ? 'flex' : 'none';
+      });
+
+      rampStartBpmInput.addEventListener('change', (e) => metronome.rampStartTempo = parseInt(e.target.value, 10));
+      rampTargetBpmInput.addEventListener('change', (e) => metronome.rampTargetTempo = parseInt(e.target.value, 10));
+
+      rampIncInput.addEventListener('change', (e) => metronome.rampIncrement = parseInt(e.target.value, 10));
+      rampEveryBarsInput.addEventListener('change', (e) => metronome.rampEveryBars = parseInt(e.target.value, 10));
+
+      rampTimeIncInput.addEventListener('change', (e) => metronome.rampIncrement = parseInt(e.target.value, 10));
+      rampEveryMinInput.addEventListener('change', (e) => metronome.rampEveryTimeSec = parseInt(e.target.value, 10) * 60);
+      rampTotalMinInput.addEventListener('change', (e) => metronome.rampTotalDurationSec = parseInt(e.target.value, 10) * 60);
+
+      // --- Custom User Presets List ---
+      const presetNameInput = document.getElementById('presetNameInput');
+      const btnSavePreset = document.getElementById('btnSavePreset');
+      const presetList = document.getElementById('presetList');
+
+      const CUSTOM_DEFAULT_PRESETS = [
+        {
+          name: "Full Hand",
+          tempo: 120,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          accents: ['accent', 'normal', 'normal', 'normal'],
+          gapEnabled: true,
+          barsPlayed: 1,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 120,
+          rampTarget: 160,
+          rampInc: 10,
+          rampEveryMin: 1,
+          rampTotalMin: 5,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 120
+        },
+        {
+          name: "Hand Single",
+          tempo: 120,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          accents: ['accent', 'normal', 'normal', 'normal'],
+          gapEnabled: true,
+          barsPlayed: 1,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 120,
+          rampTarget: 160,
+          rampInc: 10,
+          rampEveryMin: 1,
+          rampTotalMin: 5,
+          routineActive: false
+        },
+        {
+          name: "Full Leg",
+          tempo: 100,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          accents: ['accent', 'normal', 'normal', 'normal'],
+          gapEnabled: true,
+          barsPlayed: 1,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 100,
+          rampTarget: 135,
+          rampInc: 10,
+          rampEveryMin: 1,
+          rampTotalMin: 5,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 120
+        },
+        {
+          name: "Leg Single",
+          tempo: 100,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          accents: ['accent', 'normal', 'normal', 'normal'],
+          gapEnabled: true,
+          barsPlayed: 1,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 100,
+          rampTarget: 135,
+          rampInc: 10,
+          rampEveryMin: 1,
+          rampTotalMin: 5,
+          routineActive: false
+        },
+        {
+          name: "4/4 Woodblock (1 Played, 3 Muted)",
+          tempo: 120,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          accents: ['accent', 'normal', 'normal', 'normal'],
+          gapEnabled: true,
+          barsPlayed: 1,
+          barsMuted: 3,
+          rampEnabled: false,
+          rampMode: "bars",
+          rampStart: 100,
+          rampTarget: 180,
+          rampInc: 5,
+          rampEveryBars: 4,
+          routineActive: false
+        }
+      ];
+
+      function loadSavedPresets() {
+        return CUSTOM_DEFAULT_PRESETS;
+      }
+
+      function applyPreset(p) {
+        metronome.setTempo(p.tempo);
+        metronome.setBeatsPerMeasure(p.beats);
+        metronome.subdivision = p.sub;
+        metronome.soundSet = p.sound;
+
+        timeSignatureSelect.value = p.beats;
+        subdivisionSelect.value = p.sub;
+        soundSetSelect.value = p.sound;
+
+        if (p.accents) metronome.beatAccents = [...p.accents];
+        renderBeatGrid();
+
+        // Routine Settings (Full Hand & Full Leg)
+        metronome.routineActive = Boolean(p.routineActive);
+        metronome.routineMaxRuns = p.routineMaxRuns || 3;
+        metronome.routineBreakSec = p.routineBreakSec || 120;
+        metronome.routineRunCount = 0;
+        metronome.inRoutineBreak = false;
+
+        // Gap Trainer Settings
+        const gapToggle = document.getElementById('gapTrainerToggle');
+        const gapActive = Boolean(p.gapEnabled);
+
+        metronome.gapTrainerEnabled = gapActive;
+        metronome.barsPlayed = p.barsPlayed || 1;
+        metronome.barsMuted = p.barsMuted || 3;
+
+        gapToggle.checked = gapActive;
+        document.getElementById('barsPlayedInput').value = p.barsPlayed || 1;
+        document.getElementById('barsMutedInput').value = p.barsMuted || 3;
+
+        metronome.currentMeasureCount = 0;
+        metronome.checkGapMuteState();
+
+        // Tempo Ramp Settings
+        const rampToggle = document.getElementById('tempoRampToggle');
+        const rampActive = Boolean(p.rampEnabled);
+
+        metronome.tempoRampEnabled = rampActive;
+        rampToggle.checked = rampActive;
+
+        if (rampActive) {
+          metronome.rampMode = p.rampMode || 'bars';
+          metronome.rampStartTempo = p.rampStart || 120;
+          metronome.rampTargetTempo = p.rampTarget || 160;
+          metronome.rampIncrement = p.rampInc || 10;
+          metronome.rampEveryTimeSec = (p.rampEveryMin || 1) * 60;
+          metronome.rampTotalDurationSec = (p.rampTotalMin || 5) * 60;
+
+          rampModeSelect.value = p.rampMode || 'bars';
+          rampStartBpmInput.value = p.rampStart || 120;
+          rampTargetBpmInput.value = p.rampTarget || 160;
+          rampIncInput.value = p.rampInc || 10;
+          rampTimeIncInput.value = p.rampInc || 10;
+          rampEveryMinInput.value = p.rampEveryMin || 1;
+          rampTotalMinInput.value = p.rampTotalMin || 5;
+
+          const isTimeMode = (p.rampMode === 'time');
+          rampBarControls.style.display = isTimeMode ? 'none' : 'grid';
+          rampTimeControls.style.display = isTimeMode ? 'grid' : 'none';
+          rampTotalTimeContainer.style.display = isTimeMode ? 'flex' : 'none';
+        }
+
+        updateMainStatusBar(1, false);
+
+        // Auto-switch sidebar tab back to Trainers tab
+        document.getElementById('btnTabTrainers').click();
+      }
+
+      function renderPresetsUI() {
+        const presets = loadSavedPresets();
+        presetList.innerHTML = '';
+        presets.forEach((p, idx) => {
+          const item = document.createElement('div');
+          item.className = 'preset-item';
+          item.innerHTML = `
+            <div>
+              <strong>${p.name}</strong>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${p.tempo} BPM • ${p.beats}/4 • ${p.sound}</div>
+            </div>
+            <button class="btn-bump" style="color: #ff0055; padding: 2px 6px;" data-del="${idx}">✕</button>
+          `;
+          item.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            applyPreset(p);
+          });
+          item.querySelector('[data-del]').addEventListener('click', () => {
+            const updated = loadSavedPresets().filter((_, i) => i !== idx);
+            localStorage.setItem('apex_metronome_presets', JSON.stringify(updated));
+            renderPresetsUI();
+          });
+          presetList.appendChild(item);
+        });
+      }
+
+      btnSavePreset.addEventListener('click', () => {
+        const name = presetNameInput.value.trim() || `Preset ${Date.now()}`;
+        const presets = loadSavedPresets();
+        presets.push({
+          name,
+          tempo: metronome.tempo,
+          beats: metronome.beatsPerMeasure,
+          sub: metronome.subdivision,
+          sound: metronome.soundSet,
+          accents: [...metronome.beatAccents],
+          gapEnabled: metronome.gapTrainerEnabled,
+          barsPlayed: metronome.barsPlayed,
+          barsMuted: metronome.barsMuted,
+          rampEnabled: metronome.tempoRampEnabled,
+          rampMode: metronome.rampMode,
+          rampStart: metronome.rampStartTempo,
+          rampTarget: metronome.rampTargetTempo,
+          rampInc: metronome.rampIncrement,
+          rampEveryMin: metronome.rampEveryTimeSec / 60,
+          rampTotalMin: metronome.rampTotalDurationSec / 60,
+          routineActive: metronome.routineActive
+        });
+        localStorage.setItem('apex_metronome_presets', JSON.stringify(presets));
+        presetNameInput.value = '';
+        renderPresetsUI();
+      });
+
+      renderPresetsUI();
+
+      // Pendulum Animation Loop
+      function drawPendulum() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const centerX = canvas.width / 2;
+        const topY = 20;
+        const length = 160;
+
+        let angle = 0;
+        if (metronome.isPlaying && metronome.audioCtx && !metronome.inRoutineBreak && !metronome.isPaused) {
+          const secondsPerBeat = 60.0 / metronome.tempo;
+          const time = metronome.audioCtx.currentTime;
+          angle = Math.sin((time * Math.PI) / secondsPerBeat) * 0.45;
+        }
+
+        const bobX = centerX + Math.sin(angle) * length;
+        const bobY = topY + Math.cos(angle) * length;
+
+        ctx.beginPath();
+        ctx.moveTo(centerX, topY);
+        ctx.lineTo(bobX, bobY);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(bobX, bobY, 16, 0, Math.PI * 2);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-secondary');
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        requestAnimationFrame(drawPendulum);
+      }
+      drawPendulum();
+
+      // Sidebar Tab Switcher
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
+        });
+      });
+
+      // Volume Mixer Binding
+      const volAccent = document.getElementById('volAccent');
+      const volBeat = document.getElementById('volBeat');
+      const volSub = document.getElementById('volSub');
+      const volPoly = document.getElementById('volPoly');
+      const swingSlider = document.getElementById('swingSlider');
+
+      volAccent.addEventListener('input', () => {
+        metronome.accentVolume = volAccent.value / 100;
+        document.getElementById('valAccent').textContent = `${volAccent.value}%`;
+      });
+      volBeat.addEventListener('input', () => {
+        metronome.beatVolume = volBeat.value / 100;
+        document.getElementById('valBeat').textContent = `${volBeat.value}%`;
+      });
+      volSub.addEventListener('input', () => {
+        metronome.subVolume = volSub.value / 100;
+        document.getElementById('valSub').textContent = `${volSub.value}%`;
+      });
+      volPoly.addEventListener('input', () => {
+        metronome.polyVolume = volPoly.value / 100;
+        document.getElementById('valPoly').textContent = `${volPoly.value}%`;
+      });
+      swingSlider.addEventListener('input', () => {
+        metronome.swing = parseInt(swingSlider.value, 10);
+        document.getElementById('valSwing').textContent = `${swingSlider.value}%`;
+      });
+
+      // Gap Trainer Toggle
+      document.getElementById('gapTrainerToggle').addEventListener('change', (e) => {
+        metronome.gapTrainerEnabled = e.target.checked;
+        metronome.checkGapMuteState();
+        updateMainStatusBar();
+      });
+      document.getElementById('barsPlayedInput').addEventListener('change', (e) => {
+        metronome.barsPlayed = parseInt(e.target.value, 10);
+        metronome.checkGapMuteState();
+        updateMainStatusBar();
+      });
+      document.getElementById('barsMutedInput').addEventListener('change', (e) => {
+        metronome.barsMuted = parseInt(e.target.value, 10);
+        metronome.checkGapMuteState();
+        updateMainStatusBar();
+      });
+
+      // Polyrhythm Controls
+      document.getElementById('polyToggle').addEventListener('change', (e) => {
+        metronome.polyEnabled = e.target.checked;
+      });
+      document.getElementById('polyBeatsSelect').addEventListener('change', (e) => {
+        metronome.polyBeats = parseInt(e.target.value, 10);
+        renderPolyGrid();
+      });
+
+      // Tuning Drone Controls
+      document.getElementById('droneToggle').addEventListener('change', (e) => {
+        const noteFreq = parseFloat(document.getElementById('droneNoteSelect').value);
+        metronome.toggleDrone(e.target.checked, noteFreq);
+      });
+      document.getElementById('droneNoteSelect').addEventListener('change', (e) => {
+        if (metronome.droneActive) {
+          metronome.toggleDrone(true, parseFloat(e.target.value));
+        }
+      });
+
+      // Theme Selector
+      document.getElementById('themeSelect').addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-theme', e.target.value);
+      });
+
+      // Keyboard Shortcuts (Added 'P' for Pause / Resume)
+      document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          btnPlayMaster.click();
+        } else if (e.code === 'KeyP') {
+          e.preventDefault();
+          btnPauseMaster.click();
+        } else if (e.code === 'KeyT') {
+          metronome.tap();
+        } else if (e.code === 'ArrowUp') {
+          e.preventDefault();
+          metronome.setTempo(metronome.tempo + (e.shiftKey ? 5 : 1));
+        } else if (e.code === 'ArrowDown') {
+          e.preventDefault();
+          metronome.setTempo(metronome.tempo - (e.shiftKey ? 5 : 1));
+        } else if (e.code === 'KeyM') {
+          syncMasterVolumeUI(volMasterSidebar.value > 0 ? 0 : 80);
+        }
+      });
+
+      // Help Modal Handlers
+      const modalHelp = document.getElementById('modalHelp');
+      document.getElementById('btnOpenHelp').addEventListener('click', () => modalHelp.classList.add('open'));
+      document.getElementById('btnCloseHelp').addEventListener('click', () => modalHelp.classList.remove('open'));
+    });
+  </script>
+</body>
+</html>
