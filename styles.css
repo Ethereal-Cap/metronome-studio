@@ -518,6 +518,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
 }
 
 .tab-nav {
@@ -552,7 +553,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .tab-content.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 /* Trainer Tool Cards */
@@ -560,6 +563,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
 }
 
 .tool-card h3 {
@@ -627,7 +631,12 @@ input:checked + .slider-toggle:before {
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+  flex: 1;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
+
 
 .preset-item {
   display: flex;

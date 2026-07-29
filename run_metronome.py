@@ -1,6 +1,7 @@
 """
 Apex Metronome Studio - Offline Desktop Launcher
 Runs a zero-dependency local HTTP server and opens the offline Metronome App in your browser.
+Automatically syncs completed tempos to GitHub when exiting the script.
 """
 
 import os
@@ -9,6 +10,8 @@ import webbrowser
 import http.server
 import socketserver
 import threading
+import json
+import subprocess
 
 PORT = 8520
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +24,36 @@ class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress standard HTTP request logging
         pass
 
+    def do_POST(self):
+        if self.path == '/api/save-progress':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                json_path = os.path.join(DIRECTORY, 'completed_tempos.json')
+                with open(json_path, 'wb') as f:
+                    f.write(post_data)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status":"success"}')
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+        else:
+            super().do_POST()
+
+def sync_to_github():
+    json_path = os.path.join(DIRECTORY, 'completed_tempos.json')
+    if os.path.exists(json_path):
+        try:
+            print("\n🔄 Syncing completed_tempos.json to GitHub...")
+            subprocess.run(['git', 'add', 'completed_tempos.json'], cwd=DIRECTORY, check=False)
+            subprocess.run(['git', 'commit', '-m', 'Auto-sync subdivisions completed tempos'], cwd=DIRECTORY, check=False)
+            subprocess.run(['git', 'push', 'origin', 'main'], cwd=DIRECTORY, check=False)
+            print("✅ GitHub Sync Complete!")
+        except Exception as e:
+            print(f"⚠️ Git push failed: {e}")
+
 def start_server():
     with socketserver.TCPServer(("", PORT), QuietHTTPRequestHandler) as httpd:
         httpd.serve_forever()
@@ -30,7 +63,7 @@ if __name__ == '__main__':
     print("  APEX METRONOME STUDIO - OFFLINE PC LAUNCHER")
     print("=" * 60)
     print(f"Launching Metronome App at: http://localhost:{PORT}/metronome.html")
-    print("Press Ctrl+C in this console to exit.")
+    print("Press Ctrl+C in this console to exit & auto-sync to GitHub.")
     print("=" * 60)
 
     # Start background local web server
@@ -43,5 +76,6 @@ if __name__ == '__main__':
     try:
         server_thread.join()
     except KeyboardInterrupt:
-        print("\nMetronome Studio closed.")
+        print("\nMetronome Studio closing...")
+        sync_to_github()
         sys.exit(0)

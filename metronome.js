@@ -1,6 +1,7 @@
 /**
  * ULTIMATE OFFLINE METRONOME - JS ENGINE (v1.01)
- * Features Web Audio API lookahead scheduling with sub-frame synchronized visual ticks.
+ * Features Web Audio API lookahead scheduling with sub-frame synchronized visual ticks
+ * and Subdivisions Intelligent Preset Routine Engine with 1-Min Inter-Tempo Breaks.
  */
 
 class MetronomeEngine {
@@ -40,7 +41,7 @@ class MetronomeEngine {
     this.currentSubdivisionStep = 0;
     this.timerID = null;
 
-    // Gap / Mute Trainer (Updated default: 2 Bars Played / 3 Bars Muted)
+    // Gap / Mute Trainer (Default: 2 Bars Played / 3 Bars Muted)
     this.gapTrainerEnabled = false;
     this.barsPlayed = 2;
     this.barsMuted = 3;
@@ -60,7 +61,7 @@ class MetronomeEngine {
     this.rampTimeElapsedSec = 0;
     this.rampTimerInterval = null;
 
-    // Routine Engine (Full Leg & Full Hand: 3 Runs with 2-min breaks)
+    // Routine Engine (Full Leg & Full Hand)
     this.routineActive = false;
     this.routineRunCount = 0;
     this.routineMaxRuns = 3;
@@ -68,6 +69,25 @@ class MetronomeEngine {
     this.inRoutineBreak = false;
     this.routineBreakRemaining = 0;
     this.routineBreakInterval = null;
+
+    // --- Subdivisions Intelligent Preset Engine ---
+    this.subdivisionsRoutineActive = false;
+    this.subdivisionsTempos = []; // 3 randomly selected tempos e.g. [45, 89, 112]
+    this.subdivisionsCurrentTempoIdx = 0; // 0, 1, 2
+    this.subdivisionsCurrentStageIdx = 0; // 0 to 6 (7 stages)
+    this.subdivisionsBarInStage = 1; // 1 to 6 bars
+    this.inSubdivisionsBreak = false;
+    this.subdivisionsBreakRemaining = 60; // 1 min (60 seconds) break between tempos
+    this.subdivisionsBreakInterval = null;
+    this.subdivisionsStages = [
+      { name: "Quarter Notes", sub: 1 },
+      { name: "Eighth Notes", sub: 2 },
+      { name: "16th Notes", sub: 4 },
+      { name: "Eighth Triplets", sub: 3 },
+      { name: "16th Triplets", sub: 6 },
+      { name: "16th Notes", sub: 4 },
+      { name: "Eighth Triplets", sub: 3 }
+    ];
 
     // Practice Session Timer & Stopwatch (Default OFF = 0)
     this.timerMode = 'countdown'; // 'countdown' or 'stopwatch'
@@ -150,6 +170,7 @@ class MetronomeEngine {
     this.isPlaying = true;
     this.isPaused = false;
     this.inRoutineBreak = false;
+    this.inSubdivisionsBreak = false;
     this.currentBeatInMeasure = 0;
     this.currentSubdivisionStep = 0;
     this.currentPolyBeat = 0;
@@ -159,11 +180,15 @@ class MetronomeEngine {
     
     this.checkGapMuteState();
 
-    if (this.tempoRampEnabled) {
+    if (this.tempoRampEnabled && !this.subdivisionsRoutineActive) {
       this.setTempo(this.rampStartTempo);
       if (this.rampMode === 'time') {
         this.startRampTimeTimer();
       }
+    }
+
+    if (this.subdivisionsRoutineActive) {
+      this.applySubdivisionsStageState();
     }
 
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
@@ -187,7 +212,7 @@ class MetronomeEngine {
   }
 
   pause() {
-    if (!this.isPlaying && !this.inRoutineBreak) return;
+    if (!this.isPlaying && !this.inRoutineBreak && !this.inSubdivisionsBreak) return;
 
     this.isPaused = true;
     this.isPlaying = false;
@@ -200,6 +225,7 @@ class MetronomeEngine {
     this.stopPracticeStopwatch();
     this.stopRampTimeTimer();
     this.stopRoutineBreakTimer();
+    this.stopSubdivisionsBreakTimer();
 
     window.dispatchEvent(new CustomEvent('metronome-state-changed', {
       detail: { isPlaying: false, isPaused: true }
@@ -215,13 +241,15 @@ class MetronomeEngine {
 
     if (this.inRoutineBreak) {
       this.startRoutineBreakInterval();
+    } else if (this.inSubdivisionsBreak) {
+      this.startSubdivisionsBreakInterval();
     } else {
       this.nextNoteTime = this.audioCtx.currentTime + 0.05;
       this.nextPolyTime = this.audioCtx.currentTime + 0.05;
       this.scheduler();
       this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
 
-      if (this.tempoRampEnabled && this.rampMode === 'time') {
+      if (this.tempoRampEnabled && this.rampMode === 'time' && !this.subdivisionsRoutineActive) {
         this.startRampTimeTimer();
       }
       if (this.timerMode === 'countdown' && this.sessionTimeRemaining > 0) {
@@ -239,6 +267,8 @@ class MetronomeEngine {
     this.isPlaying = false;
     this.isPaused = false;
     this.inRoutineBreak = false;
+    this.inSubdivisionsBreak = false;
+    this.subdivisionsRoutineActive = false;
     if (this.timerID) {
       clearInterval(this.timerID);
       this.timerID = null;
@@ -247,6 +277,7 @@ class MetronomeEngine {
     this.stopPracticeStopwatch();
     this.stopRampTimeTimer();
     this.stopRoutineBreakTimer();
+    this.stopSubdivisionsBreakTimer();
 
     window.dispatchEvent(new CustomEvent('metronome-state-changed', {
       detail: { isPlaying: false, isPaused: false }
@@ -254,7 +285,7 @@ class MetronomeEngine {
   }
 
   toggle() {
-    if (this.isPlaying || this.isPaused || this.inRoutineBreak) {
+    if (this.isPlaying || this.isPaused || this.inRoutineBreak || this.inSubdivisionsBreak) {
       this.stop();
     } else {
       if (this.routineActive) {
@@ -266,7 +297,7 @@ class MetronomeEngine {
   }
 
   scheduler() {
-    if (this.inRoutineBreak || this.isPaused) return;
+    if (this.inRoutineBreak || this.inSubdivisionsBreak || this.isPaused) return;
 
     while (this.nextNoteTime < this.audioCtx.currentTime + this.scheduleAheadTime) {
       this.scheduleNote(
@@ -326,7 +357,9 @@ class MetronomeEngine {
 
     this.checkGapMuteState();
 
-    if (this.tempoRampEnabled && this.rampMode === 'bars') {
+    if (this.subdivisionsRoutineActive) {
+      this.advanceSubdivisionsRoutine();
+    } else if (this.tempoRampEnabled && this.rampMode === 'bars') {
       if (this.rampBarsCompleted >= this.rampEveryBars) {
         this.rampBarsCompleted = 0;
         if (this.tempo < this.rampTargetTempo) {
@@ -346,10 +379,187 @@ class MetronomeEngine {
     }));
   }
 
+  // --- Subdivisions Intelligent Preset Routine Logic ---
+  startSubdivisionsRoutine(temposArray) {
+    this.subdivisionsRoutineActive = true;
+    this.subdivisionsTempos = temposArray;
+    this.subdivisionsCurrentTempoIdx = 0;
+    this.subdivisionsCurrentStageIdx = 0;
+    this.subdivisionsBarInStage = 1;
+    this.inSubdivisionsBreak = false;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    this.setTempo(this.subdivisionsTempos[0]);
+    this.start();
+  }
+
+  advanceSubdivisionsRoutine() {
+    this.subdivisionsBarInStage++;
+    
+    if (this.subdivisionsBarInStage > 6) {
+      this.subdivisionsBarInStage = 1;
+      this.subdivisionsCurrentStageIdx++;
+
+      if (this.subdivisionsCurrentStageIdx >= this.subdivisionsStages.length) {
+        this.subdivisionsCurrentStageIdx = 0;
+        this.subdivisionsCurrentTempoIdx++;
+
+        if (this.subdivisionsCurrentTempoIdx >= this.subdivisionsTempos.length) {
+          this.onSubdivisionsRoutineComplete();
+          return;
+        } else {
+          // Trigger 1-Minute Break before switching to the next tempo!
+          this.startSubdivisionsInterTempoBreak();
+          return;
+        }
+      }
+    }
+
+    this.applySubdivisionsStageState();
+  }
+
+  startSubdivisionsInterTempoBreak() {
+    this.inSubdivisionsBreak = true;
+    this.subdivisionsBreakRemaining = 60; // 1 Minute silence
+
+    if (this.timerID) {
+      clearInterval(this.timerID);
+      this.timerID = null;
+    }
+
+    const nextBpm = this.subdivisionsTempos[this.subdivisionsCurrentTempoIdx];
+
+    window.dispatchEvent(new CustomEvent('subdivisions-break-start', {
+      detail: {
+        nextTempoIdx: this.subdivisionsCurrentTempoIdx + 1,
+        totalTempos: this.subdivisionsTempos.length,
+        nextBpm,
+        remainingSec: this.subdivisionsBreakRemaining
+      }
+    }));
+
+    this.startSubdivisionsBreakInterval();
+  }
+
+  startSubdivisionsBreakInterval() {
+    this.stopSubdivisionsBreakTimer();
+    this.subdivisionsBreakInterval = setInterval(() => {
+      if (this.subdivisionsBreakRemaining > 0 && !this.isPaused) {
+        this.subdivisionsBreakRemaining--;
+
+        const nextBpm = this.subdivisionsTempos[this.subdivisionsCurrentTempoIdx];
+
+        window.dispatchEvent(new CustomEvent('subdivisions-break-update', {
+          detail: {
+            nextTempoIdx: this.subdivisionsCurrentTempoIdx + 1,
+            totalTempos: this.subdivisionsTempos.length,
+            nextBpm,
+            remainingSec: this.subdivisionsBreakRemaining
+          }
+        }));
+
+        if (this.subdivisionsBreakRemaining <= 0) {
+          this.stopSubdivisionsBreakTimer();
+          this.resumeSubdivisionsAfterBreak();
+        }
+      }
+    }, 1000);
+  }
+
+  resumeSubdivisionsAfterBreak() {
+    this.inSubdivisionsBreak = false;
+    this.subdivisionsCurrentStageIdx = 0;
+    this.subdivisionsBarInStage = 1;
+    this.currentBeatInMeasure = 0;
+    this.currentSubdivisionStep = 0;
+
+    const nextBpm = this.subdivisionsTempos[this.subdivisionsCurrentTempoIdx];
+    this.setTempo(nextBpm);
+    this.applySubdivisionsStageState();
+
+    this.nextNoteTime = this.audioCtx.currentTime + 0.05;
+    this.nextPolyTime = this.audioCtx.currentTime + 0.05;
+    this.scheduler();
+    this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+
+    window.dispatchEvent(new CustomEvent('subdivisions-break-end'));
+  }
+
+  stopSubdivisionsBreakTimer() {
+    if (this.subdivisionsBreakInterval) {
+      clearInterval(this.subdivisionsBreakInterval);
+      this.subdivisionsBreakInterval = null;
+    }
+  }
+
+  applySubdivisionsStageState() {
+    const stage = this.subdivisionsStages[this.subdivisionsCurrentStageIdx];
+    this.setSubdivision(stage.sub);
+
+    const isFirstStage = (this.subdivisionsCurrentStageIdx === 0);
+    const playFullSubdivisions = (this.subdivisionsBarInStage === 1 || this.subdivisionsBarInStage === 6);
+
+    for (let b = 0; b < this.beatsPerMeasure; b++) {
+      for (let s = 0; s < this.subdivision; s++) {
+        if (s === 0) {
+          if (isFirstStage && !playFullSubdivisions) {
+            this.subdivisionGrid[b][s] = 'mute';
+          } else {
+            this.subdivisionGrid[b][s] = (b === 0 ? 'accent' : 'normal');
+          }
+        } else {
+          this.subdivisionGrid[b][s] = playFullSubdivisions ? 'normal' : 'mute';
+        }
+      }
+    }
+
+    const isMutedQuarterBar = isFirstStage && !playFullSubdivisions;
+
+    window.dispatchEvent(new CustomEvent('subdivisions-stage-update', {
+      detail: {
+        tempoIdx: this.subdivisionsCurrentTempoIdx + 1,
+        totalTempos: this.subdivisionsTempos.length,
+        currentBpm: this.subdivisionsTempos[this.subdivisionsCurrentTempoIdx],
+        stageIdx: this.subdivisionsCurrentStageIdx + 1,
+        totalStages: this.subdivisionsStages.length,
+        stageName: stage.name,
+        barInStage: this.subdivisionsBarInStage,
+        playFullSubdivisions,
+        isMutedQuarterBar
+      }
+    }));
+  }
+
+  onSubdivisionsRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+
+    setTimeout(() => {
+      const enteredPwd = prompt("🎉 Subdivisions Session Complete!\n🔒 Enter Admin Password to log these 3 tempos as completed:");
+      if (enteredPwd === "ArtisanOfGore") {
+        window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
+          detail: {
+            completedTempos: this.subdivisionsTempos,
+            verified: true
+          }
+        }));
+      } else {
+        alert("⚠️ Incorrect password or cancelled. These tempos were NOT marked as completed.");
+        window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
+          detail: {
+            completedTempos: this.subdivisionsTempos,
+            verified: false
+          }
+        }));
+      }
+    }, 100);
+  }
+
   startRampTimeTimer() {
     this.stopRampTimeTimer();
     this.rampTimerInterval = setInterval(() => {
-      if (!this.isPlaying || !this.tempoRampEnabled || this.rampMode !== 'time' || this.inRoutineBreak || this.isPaused) return;
+      if (!this.isPlaying || !this.tempoRampEnabled || this.rampMode !== 'time' || this.inRoutineBreak || this.isPaused || this.subdivisionsRoutineActive) return;
 
       this.rampTimeElapsedSec++;
 
@@ -469,7 +679,7 @@ class MetronomeEngine {
     const isMainBeat = subStep === 0;
 
     const dispatchTick = () => {
-      if (this.isPlaying && !this.inRoutineBreak && !this.isPaused) {
+      if (this.isPlaying && !this.inRoutineBreak && !this.inSubdivisionsBreak && !this.isPaused) {
         window.dispatchEvent(new CustomEvent('metronome-tick', {
           detail: { 
             beat, 
@@ -514,7 +724,7 @@ class MetronomeEngine {
     if (this.isBarMuted) return;
 
     const dispatchPolyTick = () => {
-      if (this.isPlaying && !this.inRoutineBreak && !this.isPaused) {
+      if (this.isPlaying && !this.inRoutineBreak && !this.inSubdivisionsBreak && !this.isPaused) {
         window.dispatchEvent(new CustomEvent('poly-tick', { detail: { polyBeat } }));
       }
     };
@@ -659,7 +869,7 @@ class MetronomeEngine {
   startPracticeStopwatch() {
     this.stopPracticeStopwatch();
     this.practiceStopwatchInterval = setInterval(() => {
-      if (!this.isPlaying || this.inRoutineBreak || this.isPaused) return;
+      if (!this.isPlaying || this.inRoutineBreak || this.inSubdivisionsBreak || this.isPaused) return;
       this.practiceElapsedSec++;
       window.dispatchEvent(new CustomEvent('practice-stopwatch-update', {
         detail: { elapsed: this.practiceElapsedSec }
