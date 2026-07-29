@@ -1,6 +1,6 @@
 /**
- * ULTIMATE OFFLINE METRONOME - JS ENGINE
- * Features Web Audio API lookahead scheduling for sub-millisecond precision.
+ * ULTIMATE OFFLINE METRONOME - JS ENGINE (v1.01)
+ * Features Web Audio API lookahead scheduling with sub-frame synchronized visual ticks.
  */
 
 class MetronomeEngine {
@@ -12,7 +12,7 @@ class MetronomeEngine {
     this.tempo = 120; // BPM
     this.maxTempo = 300; // Cap max tempo to 300 BPM
     this.beatsPerMeasure = 4;
-    this.subdivision = 1;
+    this.subdivision = 1; // 1=Quarter, 2=Eighth, 3=Triplet, 4=16th, 5=Quintuplet, 6=Sextuplet, 7=Septuplet, 8=32nd
     this.swing = 50;
     this.soundSet = 'woodblock';
 
@@ -23,8 +23,8 @@ class MetronomeEngine {
     this.subVolume = 0.4;
     this.polyVolume = 0.6;
 
-    // Accent Pattern Array: 'accent', 'normal', 'weak', 'mute'
-    this.beatAccents = ['accent', 'normal', 'normal', 'normal'];
+    // 2D Subdivision Note Matrix: [beatIndex][subStepIndex] -> 'accent', 'normal', 'weak', 'mute'
+    this.subdivisionGrid = [];
 
     // Polyrhythm Engine
     this.polyEnabled = false;
@@ -40,9 +40,9 @@ class MetronomeEngine {
     this.currentSubdivisionStep = 0;
     this.timerID = null;
 
-    // Gap / Mute Trainer (Musicca feature)
+    // Gap / Mute Trainer (Updated default: 2 Bars Played / 3 Bars Muted)
     this.gapTrainerEnabled = false;
-    this.barsPlayed = 1;
+    this.barsPlayed = 2;
     this.barsMuted = 3;
     this.currentMeasureCount = 0;
     this.isBarMuted = false;
@@ -69,9 +69,9 @@ class MetronomeEngine {
     this.routineBreakRemaining = 0;
     this.routineBreakInterval = null;
 
-    // Practice Session Timer & Stopwatch
+    // Practice Session Timer & Stopwatch (Default OFF = 0)
     this.timerMode = 'countdown'; // 'countdown' or 'stopwatch'
-    this.sessionTimerDuration = 0; // seconds
+    this.sessionTimerDuration = 0; // default OFF (continuous)
     this.sessionTimeRemaining = 0;
     this.sessionTimerInterval = null;
 
@@ -86,6 +86,9 @@ class MetronomeEngine {
 
     // Tap Tempo
     this.tapTimes = [];
+
+    // Initialize 2D Subdivision Matrix
+    this.initSubdivisionGrid();
   }
 
   initAudio() {
@@ -95,6 +98,33 @@ class MetronomeEngine {
     }
     if (this.audioCtx.state === 'suspended') {
       this.audioCtx.resume();
+    }
+  }
+
+  initSubdivisionGrid(keepExisting = true) {
+    const oldGrid = keepExisting ? this.subdivisionGrid : [];
+    this.subdivisionGrid = [];
+
+    for (let b = 0; b < this.beatsPerMeasure; b++) {
+      const beatRow = [];
+      for (let s = 0; s < this.subdivision; s++) {
+        if (oldGrid[b] && oldGrid[b][s] !== undefined) {
+          beatRow.push(oldGrid[b][s]);
+        } else {
+          if (s === 0) {
+            beatRow.push(b === 0 ? 'accent' : 'normal');
+          } else {
+            beatRow.push('normal');
+          }
+        }
+      }
+      this.subdivisionGrid.push(beatRow);
+    }
+  }
+
+  setSubnoteState(beat, subStep, state) {
+    if (this.subdivisionGrid[beat] && this.subdivisionGrid[beat][subStep] !== undefined) {
+      this.subdivisionGrid[beat][subStep] = state;
     }
   }
 
@@ -112,7 +142,6 @@ class MetronomeEngine {
     this.initAudio();
     if (this.isPlaying && !this.isPaused) return;
 
-    // If resuming from pause:
     if (this.isPaused) {
       this.resume();
       return;
@@ -128,10 +157,8 @@ class MetronomeEngine {
     this.rampBarsCompleted = 0;
     this.rampTimeElapsedSec = 0;
     
-    // Evaluate initial mute state for measure 0
     this.checkGapMuteState();
 
-    // Tempo Ramp Initialization: If ramp is enabled, start strictly at Start BPM
     if (this.tempoRampEnabled) {
       this.setTempo(this.rampStartTempo);
       if (this.rampMode === 'time') {
@@ -145,7 +172,6 @@ class MetronomeEngine {
     this.scheduler();
     this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
 
-    // Start Session Countdown Timer or Stopwatch
     if (this.timerMode === 'countdown' && this.sessionTimerDuration > 0) {
       if (this.sessionTimeRemaining <= 0) {
         this.sessionTimeRemaining = this.sessionTimerDuration;
@@ -153,7 +179,6 @@ class MetronomeEngine {
       this.startSessionTimer();
     }
 
-    // Always run elapsed stopwatch during playback
     this.startPracticeStopwatch();
 
     window.dispatchEvent(new CustomEvent('metronome-state-changed', {
@@ -167,7 +192,6 @@ class MetronomeEngine {
     this.isPaused = true;
     this.isPlaying = false;
 
-    // Stop timers without clearing current bar/time state
     if (this.timerID) {
       clearInterval(this.timerID);
       this.timerID = null;
@@ -190,10 +214,8 @@ class MetronomeEngine {
     this.isPlaying = true;
 
     if (this.inRoutineBreak) {
-      // Resume break countdown timer
       this.startRoutineBreakInterval();
     } else {
-      // Resume audio scheduler
       this.nextNoteTime = this.audioCtx.currentTime + 0.05;
       this.nextPolyTime = this.audioCtx.currentTime + 0.05;
       this.scheduler();
@@ -302,10 +324,8 @@ class MetronomeEngine {
     this.currentMeasureCount++;
     this.rampBarsCompleted++;
 
-    // Evaluate Gap / Mute Trainer State for the new measure
     this.checkGapMuteState();
 
-    // Tempo Ramp Trainer Logic (Bar-based mode)
     if (this.tempoRampEnabled && this.rampMode === 'bars') {
       if (this.rampBarsCompleted >= this.rampEveryBars) {
         this.rampBarsCompleted = 0;
@@ -326,7 +346,6 @@ class MetronomeEngine {
     }));
   }
 
-  // Time-based Tempo Ramp Timer & Routine Handler
   startRampTimeTimer() {
     this.stopRampTimeTimer();
     this.rampTimerInterval = setInterval(() => {
@@ -334,7 +353,6 @@ class MetronomeEngine {
 
       this.rampTimeElapsedSec++;
 
-      // Check if time step reached for tempo increment
       if (this.rampEveryTimeSec > 0 && this.rampTimeElapsedSec % this.rampEveryTimeSec === 0) {
         if (this.tempo < this.rampTargetTempo) {
           let inc = this.rampIncrement;
@@ -346,7 +364,6 @@ class MetronomeEngine {
         }
       }
 
-      // Check total ramp duration limit (e.g. 5 mins = 300 sec)
       if (this.rampTotalDurationSec > 0 && this.rampTimeElapsedSec >= this.rampTotalDurationSec) {
         this.onRampDurationComplete();
       }
@@ -381,7 +398,6 @@ class MetronomeEngine {
     this.routineBreakRemaining = this.routineBreakSec;
     this.rampTimeElapsedSec = 0;
 
-    // Pause audio scheduler loop so metronome goes COMPLETELY SILENT during break
     if (this.timerID) {
       clearInterval(this.timerID);
       this.timerID = null;
@@ -426,7 +442,6 @@ class MetronomeEngine {
     this.setTempo(this.rampStartTempo);
     this.checkGapMuteState();
 
-    // Restart Audio Scheduler
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
     this.nextPolyTime = this.audioCtx.currentTime + 0.05;
     this.scheduler();
@@ -450,43 +465,46 @@ class MetronomeEngine {
   }
 
   scheduleNote(beat, subStep, time) {
-    const accentState = this.beatAccents[beat] || 'normal';
+    const subState = (this.subdivisionGrid[beat] && this.subdivisionGrid[beat][subStep]) ? this.subdivisionGrid[beat][subStep] : 'normal';
     const isMainBeat = subStep === 0;
 
-    const timeDiff = Math.max(0, (time - this.audioCtx.currentTime) * 1000);
-    setTimeout(() => {
+    const dispatchTick = () => {
       if (this.isPlaying && !this.inRoutineBreak && !this.isPaused) {
         window.dispatchEvent(new CustomEvent('metronome-tick', {
           detail: { 
             beat, 
             subStep, 
-            accentState, 
+            accentState: subState, 
             isBarMuted: this.isBarMuted, 
             measureCount: this.currentMeasureCount + 1 
           }
         }));
       }
-    }, timeDiff);
+    };
 
-    if (this.isBarMuted || accentState === 'mute') return;
+    const delayMs = (time - this.audioCtx.currentTime) * 1000;
+    if (delayMs <= 8) {
+      requestAnimationFrame(dispatchTick);
+    } else {
+      setTimeout(() => {
+        requestAnimationFrame(dispatchTick);
+      }, delayMs - 8);
+    }
+
+    if (this.isBarMuted || subState === 'mute') return;
 
     let freq = 800;
     let noteVol = this.beatVolume;
 
-    if (isMainBeat) {
-      if (accentState === 'accent') {
-        freq = 1400;
-        noteVol = this.accentVolume;
-      } else if (accentState === 'weak') {
-        freq = 600;
-        noteVol = this.beatVolume * 0.7;
-      } else {
-        freq = 900;
-        noteVol = this.beatVolume;
-      }
+    if (subState === 'accent') {
+      freq = 1400;
+      noteVol = this.accentVolume;
+    } else if (subState === 'weak') {
+      freq = 450;
+      noteVol = this.subVolume * 0.7;
     } else {
-      freq = 600;
-      noteVol = this.subVolume;
+      freq = isMainBeat ? 900 : 600;
+      noteVol = isMainBeat ? this.beatVolume : this.subVolume;
     }
 
     this.playSyntheticTone(freq, time, noteVol, isMainBeat);
@@ -495,12 +513,20 @@ class MetronomeEngine {
   schedulePolyNote(polyBeat, time) {
     if (this.isBarMuted) return;
 
-    const timeDiff = Math.max(0, (time - this.audioCtx.currentTime) * 1000);
-    setTimeout(() => {
+    const dispatchPolyTick = () => {
       if (this.isPlaying && !this.inRoutineBreak && !this.isPaused) {
         window.dispatchEvent(new CustomEvent('poly-tick', { detail: { polyBeat } }));
       }
-    }, timeDiff);
+    };
+
+    const delayMs = (time - this.audioCtx.currentTime) * 1000;
+    if (delayMs <= 8) {
+      requestAnimationFrame(dispatchPolyTick);
+    } else {
+      setTimeout(() => {
+        requestAnimationFrame(dispatchPolyTick);
+      }, delayMs - 8);
+    }
 
     this.playPolyTone(1050, time, this.polyVolume);
   }
@@ -593,7 +619,6 @@ class MetronomeEngine {
     osc.stop(time + 0.08);
   }
 
-  // --- Session Countdown Timer ---
   setSessionTimerDuration(seconds) {
     this.sessionTimerDuration = seconds;
     this.sessionTimeRemaining = seconds;
@@ -631,7 +656,6 @@ class MetronomeEngine {
     window.dispatchEvent(new CustomEvent('session-timer-complete'));
   }
 
-  // --- Practice Stopwatch / Counter ---
   startPracticeStopwatch() {
     this.stopPracticeStopwatch();
     this.practiceStopwatchInterval = setInterval(() => {
@@ -678,7 +702,6 @@ class MetronomeEngine {
     });
   }
 
-  // --- Tuning Drone Feature ---
   toggleDrone(enable, pitchHz = 440) {
     this.initAudio();
     if (enable) {
@@ -712,7 +735,6 @@ class MetronomeEngine {
     }
   }
 
-  // --- Tap Tempo ---
   tap() {
     const now = performance.now();
     if (this.tapTimes.length > 0 && now - this.tapTimes[this.tapTimes.length - 1] > 3000) {
@@ -740,11 +762,12 @@ class MetronomeEngine {
 
   setBeatsPerMeasure(n) {
     this.beatsPerMeasure = parseInt(n, 10);
-    const old = [...this.beatAccents];
-    this.beatAccents = [];
-    for (let i = 0; i < this.beatsPerMeasure; i++) {
-      this.beatAccents.push(i === 0 ? 'accent' : (old[i] || 'normal'));
-    }
+    this.initSubdivisionGrid(false);
+  }
+
+  setSubdivision(s) {
+    this.subdivision = parseInt(s, 10);
+    this.initSubdivisionGrid(false);
   }
 }
 
