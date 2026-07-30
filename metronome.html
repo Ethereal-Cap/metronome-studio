@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Apex Metronome Studio v1.02</title>
+  <title>Apex Metronome Studio v1.021</title>
   <meta name="theme-color" content="#121214">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -28,7 +28,7 @@
   <header class="app-header">
     <div class="brand-title">
       <span class="brand-icon">⏱️</span>
-      <span>Apex Metronome Studio <span style="font-size:0.75rem; color:var(--accent-primary); font-weight:700;">v1.02</span></span>
+      <span>Apex Metronome Studio <span style="font-size:0.75rem; color:var(--accent-primary); font-weight:700;">v1.021</span></span>
     </div>
     <div class="header-actions">
       <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
@@ -132,6 +132,7 @@
           <label>Sound Sample Set</label>
           <select id="soundSetSelect" class="custom-select">
             <option value="woodblock" selected>Classic Woodblock</option>
+            <option value="stick">Studio Drumstick Snap (Count-In)</option>
             <option value="beep">Digital Beep</option>
             <option value="cowbell">Percussion Cowbell</option>
             <option value="drumkit">Acoustic Drumkit</option>
@@ -240,12 +241,12 @@
           </div>
         </div>
 
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 14px 0;">
 
         <!-- Session Countdown Setup Selector (DEFAULT OFF) -->
         <div class="tool-card">
-          <div class="toggle-row" style="margin-bottom: 4px;">
-            <h3><span>⏳</span> Session Limit Setup</h3>
+          <div class="toggle-row" style="margin-bottom: 2px;">
+            <h3><span>⏳</span> Session Limit</h3>
             <select id="sessionTimerPreset" class="custom-select" style="width: auto; padding: 4px 8px;">
               <option value="0" selected>Off (Continuous)</option>
               <option value="60">1 Minute</option>
@@ -262,7 +263,7 @@
           </div>
         </div>
 
-        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+        <hr style="border: none; border-top: 1px solid var(--border-color); margin: 14px 0;">
 
         <!-- Scroll-Wheel Master Volume Bar -->
         <div class="tool-card">
@@ -418,7 +419,7 @@
 
   <!-- Footer Keyboard Helpers -->
   <footer class="app-footer">
-    <div>Apex Metronome Studio v1.02 • Standalone Offline Web App</div>
+    <div>Apex Metronome Studio v1.021 • Standalone Offline Web App</div>
     <div class="hotkey-list">
       <span><span class="kbd-badge">Space</span> Start/Stop</span>
       <span><span class="kbd-badge">P</span> Pause/Resume</span>
@@ -485,6 +486,12 @@
       }
 
       function updateMainStatusBar(explicitBar = null, explicitMuteState = null) {
+        if (metronome.inCountIn) {
+          mainStatusBar.textContent = `Count-In: Bar ${metronome.countInBarCount}/2`;
+          mainStatusBar.style.color = '#3b82f6';
+          return;
+        }
+
         if (metronome.isPaused) {
           mainStatusBar.textContent = `Bar: ${currentDisplayBar} [PAUSED] • ${formatMMSS(metronome.practiceElapsedSec || 0)}`;
           mainStatusBar.style.color = '#f59e0b';
@@ -830,6 +837,10 @@
 
 
 
+      window.addEventListener('count-in-start', () => updateMainStatusBar());
+      window.addEventListener('count-in-update', () => updateMainStatusBar());
+      window.addEventListener('count-in-complete', () => updateMainStatusBar(1, false));
+
       window.addEventListener('subdivisions-stage-update', (e) => {
         const { tempoIdx, totalTempos, currentBpm, stageIdx, totalStages, stageName, barInStage, playFullSubdivisions, isMutedQuarterBar } = e.detail;
         
@@ -1162,10 +1173,26 @@
 
       renderPresetsUI();
 
+      function resizePendulumCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+      }
+      resizePendulumCanvas();
+      window.addEventListener('resize', resizePendulumCanvas);
+
       function drawPendulum() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        const centerX = canvas.width / 2;
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.width / dpr;
+        const height = canvas.height / dpr;
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, width, height);
+
+        const centerX = width / 2;
         const topY = 20;
         const length = 160;
 
@@ -1190,10 +1217,11 @@
         ctx.arc(bobX, bobY, 16, 0, Math.PI * 2);
         ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-secondary');
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
+        ctx.restore();
         requestAnimationFrame(drawPendulum);
       }
       drawPendulum();
@@ -1206,6 +1234,34 @@
           document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
         });
       });
+
+      const volMaster = document.getElementById('volMaster');
+      const volMasterSidebar = document.getElementById('volMasterSidebar');
+      const valMaster = document.getElementById('valMaster');
+      const valMasterSidebar = document.getElementById('valMasterSidebar');
+
+      function syncMasterVolumeUI(valPercent) {
+        const val = Math.max(0, Math.min(100, parseInt(valPercent, 10)));
+        metronome.masterVolume = val / 100.0;
+        if (volMaster) volMaster.value = val;
+        if (volMasterSidebar) volMasterSidebar.value = val;
+        if (valMaster) valMaster.textContent = `${val}%`;
+        if (valMasterSidebar) valMasterSidebar.textContent = `${val}%`;
+      }
+
+      if (volMasterSidebar) {
+        volMasterSidebar.addEventListener('input', (e) => syncMasterVolumeUI(e.target.value));
+        volMasterSidebar.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const step = e.shiftKey ? 5 : 1;
+          const delta = e.deltaY < 0 ? step : -step;
+          syncMasterVolumeUI(parseInt(volMasterSidebar.value, 10) + delta);
+        }, { passive: false });
+      }
+
+      if (volMaster) {
+        volMaster.addEventListener('input', (e) => syncMasterVolumeUI(e.target.value));
+      }
 
       const volAccent = document.getElementById('volAccent');
       const volBeat = document.getElementById('volBeat');
@@ -1293,6 +1349,103 @@
           syncMasterVolumeUI(volMasterSidebar.value > 0 ? 0 : 80);
         }
       });
+
+      function resetAppToDefaults() {
+        metronome.stop();
+        metronome.tempo = 120;
+        metronome.beatsPerMeasure = 4;
+        metronome.subdivision = 1;
+        metronome.soundSet = 'woodblock';
+        metronome.masterVolume = 0.8;
+        metronome.accentVolume = 1.0;
+        metronome.beatVolume = 0.7;
+        metronome.subVolume = 0.4;
+        metronome.polyVolume = 0.6;
+        metronome.swing = 50;
+        metronome.gapTrainerEnabled = false;
+        metronome.barsPlayed = 2;
+        metronome.barsMuted = 3;
+        metronome.tempoRampEnabled = false;
+        metronome.rampMode = 'time';
+        metronome.rampStartTempo = 100;
+        metronome.rampTargetTempo = 135;
+        metronome.rampIncrement = 10;
+        metronome.rampEveryBars = 4;
+        metronome.rampEveryTimeSec = 60;
+        metronome.rampTotalDurationSec = 300;
+        metronome.polyEnabled = false;
+        metronome.polyBeats = 3;
+        metronome.droneActive = false;
+        metronome.sessionTimerDuration = 0;
+        metronome.sessionTimeRemaining = 0;
+        metronome.subdivisionsRoutineActive = false;
+        metronome.inCountIn = false;
+        metronome.inRoutineBreak = false;
+        metronome.inSubdivisionsBreak = false;
+        metronome.initSubdivisionGrid(false);
+
+        bpmInput.value = 120;
+        bpmSlider.value = 120;
+        tempoBadge.textContent = getTempoMarking(120);
+
+        timeSignatureSelect.value = "4";
+        subdivisionSelect.value = "1";
+        soundSetSelect.value = "woodblock";
+
+        const themeSelect = document.getElementById('themeSelect');
+        if (themeSelect) themeSelect.value = "studio";
+        document.documentElement.setAttribute('data-theme', 'studio');
+
+        document.getElementById('gapTrainerToggle').checked = false;
+        document.getElementById('barsPlayedInput').value = 2;
+        document.getElementById('barsMutedInput').value = 3;
+
+        document.getElementById('tempoRampToggle').checked = false;
+        document.getElementById('rampModeSelect').value = "time";
+        document.getElementById('rampStartBpmInput').value = 100;
+        document.getElementById('rampTargetBpmInput').value = 135;
+        document.getElementById('rampIncInput').value = 5;
+        document.getElementById('rampEveryBarsInput').value = 4;
+        document.getElementById('rampTimeIncInput').value = 10;
+        document.getElementById('rampEveryMinInput').value = 1;
+        document.getElementById('rampTotalMinInput').value = 5;
+
+        document.getElementById('rampBarControls').style.display = 'none';
+        document.getElementById('rampTimeControls').style.display = 'grid';
+        document.getElementById('rampTotalTimeContainer').style.display = 'flex';
+
+        document.getElementById('sessionTimerPreset').value = "0";
+
+        syncMasterVolumeUI(80);
+
+        volAccent.value = 100;
+        document.getElementById('valAccent').textContent = "100%";
+        volBeat.value = 70;
+        document.getElementById('valBeat').textContent = "70%";
+        volSub.value = 40;
+        document.getElementById('valSub').textContent = "40%";
+        volPoly.value = 60;
+        document.getElementById('valPoly').textContent = "60%";
+        swingSlider.value = 50;
+        document.getElementById('valSwing').textContent = "50%";
+
+        document.getElementById('polyToggle').checked = false;
+        document.getElementById('polyBeatsSelect').value = "3";
+        document.getElementById('droneToggle').checked = false;
+        document.getElementById('droneNoteSelect').value = "440";
+        document.getElementById('droneCalibInput').value = 440;
+        document.getElementById('screenFlashToggle').checked = false;
+
+        currentDisplayBar = 1;
+        currentDisplayMuteState = false;
+        updateMainStatusBar(1, false);
+        mainSessionTimerDisplay.textContent = "Session Timer: --:--";
+        renderBeatGrid();
+        renderPolyGrid();
+      }
+
+      resetAppToDefaults();
+      window.addEventListener('pageshow', resetAppToDefaults);
 
       const modalHelp = document.getElementById('modalHelp');
       document.getElementById('btnOpenHelp').addEventListener('click', () => modalHelp.classList.add('open'));

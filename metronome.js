@@ -89,6 +89,11 @@ class MetronomeEngine {
       { name: "Eighth Triplets", sub: 3 }
     ];
 
+    // 2-Bar Count-In Feature
+    this.inCountIn = false;
+    this.countInBarCount = 1;
+    this.countInTotalBars = 2;
+
     // Practice Session Timer & Stopwatch (Default OFF = 0)
     this.timerMode = 'countdown'; // 'countdown' or 'stopwatch'
     this.sessionTimerDuration = 0; // default OFF (continuous)
@@ -171,6 +176,12 @@ class MetronomeEngine {
     this.isPaused = false;
     this.inRoutineBreak = false;
     this.inSubdivisionsBreak = false;
+
+    // Enable 2-bar count-in on start
+    this.inCountIn = true;
+    this.countInBarCount = 1;
+    this.countInTotalBars = 2;
+
     this.currentBeatInMeasure = 0;
     this.currentSubdivisionStep = 0;
     this.currentPolyBeat = 0;
@@ -182,13 +193,6 @@ class MetronomeEngine {
 
     if (this.tempoRampEnabled && !this.subdivisionsRoutineActive) {
       this.setTempo(this.rampStartTempo);
-      if (this.rampMode === 'time') {
-        this.startRampTimeTimer();
-      }
-    }
-
-    if (this.subdivisionsRoutineActive) {
-      this.applySubdivisionsStageState();
     }
 
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
@@ -197,14 +201,9 @@ class MetronomeEngine {
     this.scheduler();
     this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
 
-    if (this.timerMode === 'countdown' && this.sessionTimerDuration > 0) {
-      if (this.sessionTimeRemaining <= 0) {
-        this.sessionTimeRemaining = this.sessionTimerDuration;
-      }
-      this.startSessionTimer();
-    }
-
-    this.startPracticeStopwatch();
+    window.dispatchEvent(new CustomEvent('count-in-start', {
+      detail: { countInBar: 1, totalCountInBars: 2 }
+    }));
 
     window.dispatchEvent(new CustomEvent('metronome-state-changed', {
       detail: { isPlaying: true, isPaused: false }
@@ -266,6 +265,7 @@ class MetronomeEngine {
   stop() {
     this.isPlaying = false;
     this.isPaused = false;
+    this.inCountIn = false;
     this.inRoutineBreak = false;
     this.inSubdivisionsBreak = false;
     this.subdivisionsRoutineActive = false;
@@ -319,8 +319,9 @@ class MetronomeEngine {
   advanceNote() {
     const secondsPerBeat = 60.0 / this.tempo;
     
-    let stepDuration = secondsPerBeat / this.subdivision;
-    if (this.subdivision === 2) {
+    const effSubdivision = this.inCountIn ? 1 : this.subdivision;
+    let stepDuration = secondsPerBeat / effSubdivision;
+    if (!this.inCountIn && this.subdivision === 2) {
       const swingRatio = this.swing / 100.0;
       if (this.currentSubdivisionStep % 2 === 0) {
         stepDuration = secondsPerBeat * (swingRatio * 2);
@@ -332,7 +333,7 @@ class MetronomeEngine {
     this.nextNoteTime += stepDuration;
 
     this.currentSubdivisionStep++;
-    if (this.currentSubdivisionStep >= this.subdivision) {
+    if (this.currentSubdivisionStep >= effSubdivision) {
       this.currentSubdivisionStep = 0;
       this.currentBeatInMeasure++;
 
@@ -352,6 +353,39 @@ class MetronomeEngine {
   }
 
   onMeasureComplete() {
+    if (this.inCountIn) {
+      this.countInBarCount++;
+      if (this.countInBarCount > this.countInTotalBars) {
+        // 2-Bar Count-In completed! Start main practice session!
+        this.inCountIn = false;
+        this.currentMeasureCount = 0;
+
+        if (this.tempoRampEnabled && !this.subdivisionsRoutineActive && this.rampMode === 'time') {
+          this.startRampTimeTimer();
+        }
+
+        if (this.subdivisionsRoutineActive) {
+          this.applySubdivisionsStageState();
+        }
+
+        if (this.timerMode === 'countdown' && this.sessionTimerDuration > 0) {
+          if (this.sessionTimeRemaining <= 0) {
+            this.sessionTimeRemaining = this.sessionTimerDuration;
+          }
+          this.startSessionTimer();
+        }
+
+        this.startPracticeStopwatch();
+
+        window.dispatchEvent(new CustomEvent('count-in-complete'));
+      } else {
+        window.dispatchEvent(new CustomEvent('count-in-update', {
+          detail: { countInBar: this.countInBarCount, totalCountInBars: 2 }
+        }));
+      }
+      return; // Do NOT increment practice currentMeasureCount during count-in!
+    }
+
     this.currentMeasureCount++;
     this.rampBarsCompleted++;
 
@@ -675,8 +709,13 @@ class MetronomeEngine {
   }
 
   scheduleNote(beat, subStep, time) {
-    const subState = (this.subdivisionGrid[beat] && this.subdivisionGrid[beat][subStep]) ? this.subdivisionGrid[beat][subStep] : 'normal';
+    let subState = (this.subdivisionGrid[beat] && this.subdivisionGrid[beat][subStep]) ? this.subdivisionGrid[beat][subStep] : 'normal';
     const isMainBeat = subStep === 0;
+
+    if (this.inCountIn) {
+      if (!isMainBeat) return;
+      subState = (beat === 0 ? 'accent' : 'normal');
+    }
 
     const dispatchTick = () => {
       if (this.isPlaying && !this.inRoutineBreak && !this.inSubdivisionsBreak && !this.isPaused) {
@@ -685,8 +724,8 @@ class MetronomeEngine {
             beat, 
             subStep, 
             accentState: subState, 
-            isBarMuted: this.isBarMuted, 
-            measureCount: this.currentMeasureCount + 1 
+            isBarMuted: this.inCountIn ? false : this.isBarMuted, 
+            measureCount: this.inCountIn ? 0 : this.currentMeasureCount + 1 
           }
         }));
       }
@@ -699,6 +738,12 @@ class MetronomeEngine {
       setTimeout(() => {
         requestAnimationFrame(dispatchTick);
       }, delayMs - 8);
+    }
+
+    if (this.inCountIn) {
+      if (!isMainBeat) return;
+      this.playCountInTone(time, this.accentVolume, beat === 0);
+      return;
     }
 
     if (this.isBarMuted || subState === 'mute') return;
@@ -792,6 +837,14 @@ class MetronomeEngine {
         gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
         break;
 
+      case 'stick':
+        osc.type = isMainBeat ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(isMainBeat ? 2400 : 1600, time);
+        osc.frequency.exponentialRampToValueAtTime(isMainBeat ? 1200 : 800, time + 0.035);
+        gain.gain.setValueAtTime(noteVolume, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+        break;
+
       case 'pingpong':
       default:
         osc.type = 'sine';
@@ -807,6 +860,52 @@ class MetronomeEngine {
 
     osc.start(time);
     osc.stop(time + 0.15);
+  }
+
+  playCountInTone(time, noteVolume, isBeat1) {
+    const master = this.audioCtx.createGain();
+    master.gain.value = this.masterVolume;
+
+    const osc = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+
+    osc.type = isBeat1 ? 'triangle' : 'sine';
+    const startFreq = isBeat1 ? 2400 : 1600;
+    const endFreq = isBeat1 ? 1200 : 800;
+
+    osc.frequency.setValueAtTime(startFreq, time);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, time + 0.035);
+
+    const volMult = isBeat1 ? 1.0 : 0.75;
+    gain.gain.setValueAtTime(noteVolume * volMult, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+
+    const bufferSize = Math.floor(this.audioCtx.sampleRate * 0.015);
+    const noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const noiseNode = this.audioCtx.createBufferSource();
+    noiseNode.buffer = noiseBuffer;
+
+    const noiseGain = this.audioCtx.createGain();
+    noiseGain.gain.setValueAtTime(noteVolume * (isBeat1 ? 0.35 : 0.2), time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
+
+    osc.connect(gain);
+    gain.connect(master);
+
+    noiseNode.connect(noiseGain);
+    noiseGain.connect(master);
+
+    master.connect(this.audioCtx.destination);
+
+    osc.start(time);
+    osc.stop(time + 0.04);
+    noiseNode.start(time);
+    noiseNode.stop(time + 0.02);
   }
 
   playPolyTone(freq, time, volume) {
