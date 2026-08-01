@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="studio">
+<html lang="en" data-theme="celestial">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -14,7 +14,6 @@
   <style>
     /* Sub-beat node visual separator for beat groupings */
     .beat-node.main-beat-start {
-      border-left: 3px solid var(--accent-primary) !important;
       margin-left: 6px;
     }
   </style>
@@ -34,7 +33,8 @@
       <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
         <label for="themeSelect" style="font-size: 0.8rem;">Theme:</label>
         <select id="themeSelect" class="custom-select" style="padding: 6px 10px;">
-          <option value="studio" selected>Studio Emerald</option>
+          <option value="celestial" selected>✨ Celestial Time</option>
+          <option value="studio">Studio Emerald</option>
           <option value="dark">Dark Cyber</option>
           <option value="vintage">Vintage Wood</option>
           <option value="light">Studio Light</option>
@@ -419,7 +419,7 @@
 
   <!-- Footer Keyboard Helpers -->
   <footer class="app-footer">
-    <div>Apex Metronome Studio v1.021 • Standalone Offline Web App</div>
+    <div>Apex Metronome Studio v1.3 • Standalone Offline Web App</div>
     <div class="hotkey-list">
       <span><span class="kbd-badge">Space</span> Start/Stop</span>
       <span><span class="kbd-badge">P</span> Pause/Resume</span>
@@ -438,12 +438,12 @@
         <button id="btnCloseHelp" class="btn-close-modal">✕</button>
       </div>
       <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 10px;">
-        <p><strong>🎼 Subdivisions Preset Routine:</strong> Picks 3 random uncompleted tempos between 30-150. Plays 7 subdivision stages (6 bars each) per tempo with 1-min breaks in between. Password <code>ArtisanOfGore</code> required at the end to log tempos as done!</p>
+        <p><strong>🎼 Subdivisions Preset Routine:</strong> Picks 3 random uncompleted tempos between 30-150. Plays 7 subdivision stages (6 bars each) per tempo with 30-sec breaks in between. Pass code verification prompt required at the end to log tempos as done!</p>
         <p><strong>🌐 Direct GitHub Sync:</strong> Paste your GitHub Personal Token once in Tab 2 to save progress directly to GitHub from your laptop or phone without Python!</p>
         <p><strong>🎯 Mute / Gap Trainer:</strong> Mutes designated bars during playback (e.g., 2 played, 3 muted) to improve internal rhythm stability.</p>
         <p><strong>📈 Independent Tempo Ramp:</strong> Set custom Start BPM and End BPM. Choose Bar mode or Time mode (e.g., +10 BPM every 1 min till 5 min)!</p>
         <p><strong>⏸️ Pause / Resume:</strong> Click PAUSE (or press key 'P') to freeze your practice/routine at any moment and RESUME right where you left off!</p>
-        <p><strong>🔒 Preset Deletion Protection:</strong> Admin password <code>ArtisanOfGore</code> prompt required to delete presets.</p>
+        <p><strong>🔒 Preset Deletion Protection:</strong> Admin verification required to delete presets.</p>
       </div>
     </div>
   </footer>
@@ -509,8 +509,22 @@
           const nextBpm = metronome.subdivisionsTempos[metronome.subdivisionsCurrentTempoIdx];
           const nextTempoIdx = metronome.subdivisionsCurrentTempoIdx + 1;
           const totalTempos = metronome.subdivisionsTempos.length;
-          mainStatusBar.textContent = `⏸️ 1-Min Break before Tempo ${nextTempoIdx}/${totalTempos} (${nextBpm} BPM): 00:${remainingSec.toString().padStart(2, '0')}`;
+          mainStatusBar.textContent = `⏸️ 30-Sec Break before Tempo ${nextTempoIdx}/${totalTempos} (${nextBpm} BPM): 00:${remainingSec.toString().padStart(2, '0')}`;
           mainStatusBar.style.color = '#f59e0b';
+          return;
+        }
+
+        if (metronome.subdivisionsRoutineActive) {
+          const stageIdx = metronome.subdivisionsCurrentStageIdx + 1;
+          const totalStages = metronome.subdivisionsStages.length;
+          const stageName = metronome.subdivisionsStages[metronome.subdivisionsCurrentStageIdx] ? metronome.subdivisionsStages[metronome.subdivisionsCurrentStageIdx].name : '';
+          const barInStage = metronome.subdivisionsBarInStage;
+          const tempoIdx = metronome.subdivisionsCurrentTempoIdx + 1;
+          const totalTempos = metronome.subdivisionsTempos.length;
+          const timeFormatted = formatMMSS(metronome.practiceElapsedSec || 0);
+
+          mainStatusBar.textContent = `Subdivisions (${metronome.tempo} BPM • ${tempoIdx}/${totalTempos}) • Stage ${stageIdx}/${totalStages} (${stageName}) • Bar ${barInStage}/6 • ${timeFormatted === '--:--' ? '00:00' : timeFormatted}`;
+          mainStatusBar.style.color = 'var(--accent-primary)';
           return;
         }
 
@@ -655,7 +669,7 @@
         polyGrid.innerHTML = '';
         for (let i = 0; i < metronome.polyBeats; i++) {
           const node = document.createElement('div');
-          node.className = 'beat-node';
+          node.className = 'beat-node main-beat-node';
           node.style.borderColor = 'var(--beat-poly)';
           node.innerHTML = `<span class="beat-num">P${i + 1}</span><span class="beat-icon">◆</span>`;
           polyGrid.appendChild(node);
@@ -693,9 +707,7 @@
         });
 
         if (beat === 0 && subStep === 0) {
-          if (!metronome.subdivisionsRoutineActive) {
-            updateMainStatusBar(measureCount, isBarMuted);
-          }
+          updateMainStatusBar(measureCount, isBarMuted);
         }
 
         if (screenFlashToggle.checked && !isBarMuted) {
@@ -713,9 +725,7 @@
       });
 
       window.addEventListener('practice-stopwatch-update', () => {
-        if (!metronome.subdivisionsRoutineActive) {
-          updateMainStatusBar();
-        }
+        updateMainStatusBar();
       });
 
       window.addEventListener('routine-break-start', () => updateMainStatusBar());
@@ -762,15 +772,25 @@
           const authHeader = token.startsWith('github_pat_') ? `Bearer ${token}` : `token ${token}`;
 
           let sha = null;
+          let existingRemoteList = [];
           const getRes = await fetch(url, {
             headers: { 'Authorization': authHeader }
           });
           if (getRes.ok) {
             const getData = await getRes.json();
             sha = getData.sha;
+            try {
+              const decodedStr = decodeURIComponent(escape(atob(getData.content.replace(/\s/g, ''))));
+              const parsed = JSON.parse(decodedStr);
+              if (Array.isArray(parsed)) existingRemoteList = parsed;
+            } catch (e) {}
           }
 
-          const jsonContent = JSON.stringify(newCompletedList, null, 2);
+          // Merge & deduplicate local + remote tempos so no device ever overwrites progress
+          const mergedList = Array.from(new Set([...existingRemoteList, ...newCompletedList]));
+          localStorage.setItem('apex_metronome_subdivisions_completed_tempos', JSON.stringify(mergedList));
+
+          const jsonContent = JSON.stringify(mergedList, null, 2);
           const contentEncoded = btoa(unescape(encodeURIComponent(jsonContent)));
 
           const bodyObj = {
@@ -793,6 +813,21 @@
         }
       }
 
+      async function fetchRemoteCompletedTempos() {
+        try {
+          const res = await fetch('completed_tempos.json?t=' + Date.now());
+          if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list)) {
+              const local = getCompletedSubdivisionTempos();
+              const merged = Array.from(new Set([...local, ...list]));
+              localStorage.setItem('apex_metronome_subdivisions_completed_tempos', JSON.stringify(merged));
+            }
+          }
+        } catch (e) {}
+      }
+      fetchRemoteCompletedTempos();
+
       function getCompletedSubdivisionTempos() {
         try {
           const stored = localStorage.getItem('apex_metronome_subdivisions_completed_tempos');
@@ -807,17 +842,20 @@
       }
 
       function saveCompletedSubdivisionTempos(newCompletedList) {
-        localStorage.setItem('apex_metronome_subdivisions_completed_tempos', JSON.stringify(newCompletedList));
+        const local = getCompletedSubdivisionTempos();
+        const mergedList = Array.from(new Set([...local, ...newCompletedList]));
+
+        localStorage.setItem('apex_metronome_subdivisions_completed_tempos', JSON.stringify(mergedList));
         
         // 1. Post to local python server if available
         fetch('/api/save-progress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCompletedList)
+          body: JSON.stringify(mergedList)
         }).catch(() => {});
 
         // 2. Direct GitHub REST API Sync (for laptop / mobile without Python)
-        syncDirectToGitHub(newCompletedList);
+        syncDirectToGitHub(mergedList);
       }
 
       // Fetch latest completed tempos from repo completed_tempos.json on startup
@@ -873,6 +911,18 @@
       // Built-in Default Presets Collection
       const BUILTIN_DEFAULT_PRESETS = [
         {
+          id: "sixteenths_rhythm_training",
+          name: "16th Rhythm Training",
+          isSixteenthsRoutine: true,
+          isBuiltin: true
+        },
+        {
+          id: "eighths_rhythm_training",
+          name: "8ths Rhythm Training",
+          isEighthsRoutine: true,
+          isBuiltin: true
+        },
+        {
           id: "subdivisions_preset",
           name: "Subdivisions (30-150)",
           isSubdivisionsRoutine: true,
@@ -892,6 +942,28 @@
           rampMode: "time",
           rampStart: 120,
           rampTarget: 160,
+          rampInc: 10,
+          rampEveryMin: 1,
+          rampTotalMin: 5,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 120,
+          isBuiltin: true
+        },
+        {
+          id: "full_fingers",
+          name: "Full Fingers",
+          tempo: 110,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          gapEnabled: true,
+          barsPlayed: 2,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 110,
+          rampTarget: 150,
           rampInc: 10,
           rampEveryMin: 1,
           rampTotalMin: 5,
@@ -1001,6 +1073,20 @@
       }
 
       function applyPreset(p) {
+        resetAppToDefaults();
+
+        if (p.isSixteenthsRoutine) {
+          metronome.startSixteenthsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
+        if (p.isEighthsRoutine) {
+          metronome.startEighthsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
         if (p.isSubdivisionsRoutine) {
           const completedList = getCompletedSubdivisionTempos();
           const allTempos = [];
@@ -1022,7 +1108,7 @@
             selected.push(pool.splice(randIdx, 1)[0]);
           }
 
-          alert(`🎯 Subdivisions Session Selected Tempos:\n👉 ${selected.join(' BPM, ')} BPM\n\n(1-Minute Silence Break between each tempo)\n\nStarting Session...`);
+          alert(`🎯 Subdivisions Session Selected Tempos:\n👉 ${selected.join(' BPM, ')} BPM\n\n(30-Second Silence Break between each tempo)\n\nStarting Session...`);
           metronome.startSubdivisionsRoutine(selected);
           document.getElementById('btnTabTrainers').click();
           return;
@@ -1104,8 +1190,12 @@
           let descText = `${p.tempo || 120} BPM • ${p.beats || 4}/4 • ${p.sound || 'woodblock'}`;
           let nameText = p.name;
 
-          if (p.isSubdivisionsRoutine) {
-            descText = `Intelligent Routine • ${completedCount}/121 Tempos Completed (1-Min Breaks)`;
+          if (p.isSixteenthsRoutine) {
+            descText = `Interactive Training • 35 Patterns (4 Bars Each, 140 Bars Total)`;
+          } else if (p.isEighthsRoutine) {
+            descText = `Interactive Training • 12 Patterns (4 Bars Each, 48 Bars Total)`;
+          } else if (p.isSubdivisionsRoutine) {
+            descText = `Intelligent Routine • ${completedCount}/121 Tempos Completed (30-Sec Breaks)`;
           }
 
           item.innerHTML = `
@@ -1350,8 +1440,38 @@
         }
       });
 
+      window.addEventListener('eighths-training-update', (e) => {
+        const { stepIdx, totalSteps, patternName, barInStep, totalBarsInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `8ths Training • Step ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
+      window.addEventListener('sixteenths-training-update', (e) => {
+        const { stepIdx, totalSteps, patternName, barInStep, totalBarsInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `16th Training • Step ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
       function resetAppToDefaults() {
         metronome.stop();
+        metronome.eighthsTrainingRoutineActive = false;
+        metronome.eighthsCurrentStepIdx = 0;
+        metronome.eighthsBarInStep = 1;
+        metronome.sixteenthsTrainingRoutineActive = false;
+        metronome.sixteenthsCurrentStepIdx = 0;
+        metronome.sixteenthsBarInStep = 1;
         metronome.tempo = 120;
         metronome.beatsPerMeasure = 4;
         metronome.subdivision = 1;
@@ -1393,8 +1513,8 @@
         soundSetSelect.value = "woodblock";
 
         const themeSelect = document.getElementById('themeSelect');
-        if (themeSelect) themeSelect.value = "studio";
-        document.documentElement.setAttribute('data-theme', 'studio');
+        if (themeSelect) themeSelect.value = "celestial";
+        document.documentElement.setAttribute('data-theme', 'celestial');
 
         document.getElementById('gapTrainerToggle').checked = false;
         document.getElementById('barsPlayedInput').value = 2;

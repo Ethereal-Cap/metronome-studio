@@ -77,7 +77,7 @@ class MetronomeEngine {
     this.subdivisionsCurrentStageIdx = 0; // 0 to 6 (7 stages)
     this.subdivisionsBarInStage = 1; // 1 to 6 bars
     this.inSubdivisionsBreak = false;
-    this.subdivisionsBreakRemaining = 60; // 1 min (60 seconds) break between tempos
+    this.subdivisionsBreakRemaining = 30; // 30 seconds break between tempos
     this.subdivisionsBreakInterval = null;
     this.subdivisionsStages = [
       { name: "Quarter Notes", sub: 1 },
@@ -88,6 +88,16 @@ class MetronomeEngine {
       { name: "16th Notes", sub: 4 },
       { name: "Eighth Triplets", sub: 3 }
     ];
+
+    // --- 8ths Rhythm Training Preset Routine ---
+    this.eighthsTrainingRoutineActive = false;
+    this.eighthsCurrentStepIdx = 0;
+    this.eighthsBarInStep = 1;
+
+    // --- 16th Rhythm Training Preset Routine ---
+    this.sixteenthsTrainingRoutineActive = false;
+    this.sixteenthsCurrentStepIdx = 0;
+    this.sixteenthsBarInStep = 1;
 
     // 2-Bar Count-In Feature
     this.inCountIn = false;
@@ -269,6 +279,8 @@ class MetronomeEngine {
     this.inRoutineBreak = false;
     this.inSubdivisionsBreak = false;
     this.subdivisionsRoutineActive = false;
+    this.eighthsTrainingRoutineActive = false;
+    this.sixteenthsTrainingRoutineActive = false;
     if (this.timerID) {
       clearInterval(this.timerID);
       this.timerID = null;
@@ -364,7 +376,11 @@ class MetronomeEngine {
           this.startRampTimeTimer();
         }
 
-        if (this.subdivisionsRoutineActive) {
+        if (this.sixteenthsTrainingRoutineActive) {
+          this.applySixteenthsTrainingStepState();
+        } else if (this.eighthsTrainingRoutineActive) {
+          this.applyEighthsTrainingStepState();
+        } else if (this.subdivisionsRoutineActive) {
           this.applySubdivisionsStageState();
         }
 
@@ -391,7 +407,11 @@ class MetronomeEngine {
 
     this.checkGapMuteState();
 
-    if (this.subdivisionsRoutineActive) {
+    if (this.sixteenthsTrainingRoutineActive) {
+      this.advanceSixteenthsTrainingRoutine();
+    } else if (this.eighthsTrainingRoutineActive) {
+      this.advanceEighthsTrainingRoutine();
+    } else if (this.subdivisionsRoutineActive) {
       this.advanceSubdivisionsRoutine();
     } else if (this.tempoRampEnabled && this.rampMode === 'bars') {
       if (this.rampBarsCompleted >= this.rampEveryBars) {
@@ -455,7 +475,7 @@ class MetronomeEngine {
 
   startSubdivisionsInterTempoBreak() {
     this.inSubdivisionsBreak = true;
-    this.subdivisionsBreakRemaining = 60; // 1 Minute silence
+    this.subdivisionsBreakRemaining = 30; // 30 seconds silence
 
     if (this.timerID) {
       clearInterval(this.timerID);
@@ -587,6 +607,258 @@ class MetronomeEngine {
           }
         }));
       }
+    }, 100);
+  }
+
+  // --- 8ths Rhythm Training Preset Routine Logic ---
+  startEighthsTrainingRoutine() {
+    this.eighthsTrainingRoutineActive = true;
+    this.subdivisionsRoutineActive = false;
+    this.eighthsCurrentStepIdx = 0;
+    this.eighthsBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    // Force 4/4 time signature and 8th notes subdivision
+    this.beatsPerMeasure = 4;
+    this.subdivision = 2;
+
+    this.applyEighthsTrainingStepState();
+    this.start();
+  }
+
+  getEighthsTrainingPatterns() {
+    const pAll8ths = [['accent', 'normal'], ['normal', 'normal'], ['normal', 'normal'], ['normal', 'normal']];
+    const pAllOffbeats = [['accent', 'normal'], ['normal', 'normal'], ['normal', 'normal'], ['normal', 'normal']];
+    const pQuarters = [['accent', 'mute'], ['normal', 'mute'], ['normal', 'mute'], ['normal', 'mute']];
+
+    const p5a = [['accent', 'normal'], ['normal', 'mute'], ['normal', 'mute'], ['normal', 'mute']];
+    const p5b = [['accent', 'mute'], ['normal', 'normal'], ['normal', 'mute'], ['normal', 'mute']];
+    const p5c = [['accent', 'mute'], ['normal', 'mute'], ['normal', 'normal'], ['normal', 'mute']];
+    const p5d = [['accent', 'mute'], ['normal', 'mute'], ['normal', 'mute'], ['normal', 'normal']];
+
+    const p6a = [['accent', 'mute'], ['normal', 'normal'], ['normal', 'normal'], ['normal', 'normal']];
+    const p6b = [['accent', 'normal'], ['normal', 'mute'], ['normal', 'normal'], ['normal', 'normal']];
+    const p6c = [['accent', 'normal'], ['normal', 'normal'], ['normal', 'mute'], ['normal', 'normal']];
+    const p6d = [['accent', 'normal'], ['normal', 'normal'], ['normal', 'normal'], ['normal', 'mute']];
+
+    return [
+      { name: "All 8th Notes", type: "1-bar", gridA: pAll8ths },
+      { name: "All '&' Notes", type: "1-bar", gridA: pAllOffbeats },
+      { name: "Quarter ➔ '&' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllOffbeats },
+      { name: "All 8ths ➔ '&' Notes", type: "2-bar", gridA: pAll8ths, gridB: pAllOffbeats },
+      { name: "Beat 1: Quarters + '&'", type: "1-bar", gridA: p5a },
+      { name: "Beat 1: All 8ths ('&' Silent)", type: "1-bar", gridA: p6a },
+      { name: "Beat 2: Quarters + '&'", type: "1-bar", gridA: p5b },
+      { name: "Beat 2: All 8ths ('&' Silent)", type: "1-bar", gridA: p6b },
+      { name: "Beat 3: Quarters + '&'", type: "1-bar", gridA: p5c },
+      { name: "Beat 3: All 8ths ('&' Silent)", type: "1-bar", gridA: p6c },
+      { name: "Beat 4: Quarters + '&'", type: "1-bar", gridA: p5d },
+      { name: "Beat 4: All 8ths ('&' Silent)", type: "1-bar", gridA: p6d }
+    ];
+  }
+
+  applyEighthsTrainingStepState() {
+    const patterns = this.getEighthsTrainingPatterns();
+    const current = patterns[this.eighthsCurrentStepIdx];
+    if (!current) return;
+
+    let targetGrid = current.gridA;
+    if (current.type === "2-bar" && (this.eighthsBarInStep === 2 || this.eighthsBarInStep === 4)) {
+      targetGrid = current.gridB;
+    }
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(targetGrid));
+
+    window.dispatchEvent(new CustomEvent('eighths-training-update', {
+      detail: {
+        stepIdx: this.eighthsCurrentStepIdx + 1,
+        totalSteps: patterns.length,
+        patternName: current.name,
+        barInStep: this.eighthsBarInStep,
+        totalBarsInStep: 4,
+        isBarB: current.type === "2-bar" && (this.eighthsBarInStep === 2 || this.eighthsBarInStep === 4)
+      }
+    }));
+  }
+
+  advanceEighthsTrainingRoutine() {
+    this.eighthsBarInStep++;
+
+    const patterns = this.getEighthsTrainingPatterns();
+
+    if (this.eighthsBarInStep > 4) {
+      this.eighthsBarInStep = 1;
+      this.eighthsCurrentStepIdx++;
+
+      if (this.eighthsCurrentStepIdx >= patterns.length) {
+        this.onEighthsTrainingRoutineComplete();
+        return;
+      }
+    }
+
+    this.applyEighthsTrainingStepState();
+  }
+
+  onEighthsTrainingRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+    setTimeout(() => {
+      alert("🎉 8ths Rhythm Training Complete! All 12 Patterns Finished.");
+    }, 100);
+  }
+
+  // --- 16th Rhythm Training Preset Routine Logic ---
+  startSixteenthsTrainingRoutine() {
+    this.sixteenthsTrainingRoutineActive = true;
+    this.eighthsTrainingRoutineActive = false;
+    this.subdivisionsRoutineActive = false;
+    this.sixteenthsCurrentStepIdx = 0;
+    this.sixteenthsBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    // Force 4/4 time signature and 16th notes subdivision
+    this.beatsPerMeasure = 4;
+    this.subdivision = 4;
+
+    this.applySixteenthsTrainingStepState();
+    this.start();
+  }
+
+  getSixteenthsTrainingPatterns() {
+    const bAcc16 = ['accent', 'normal', 'normal', 'normal'];
+    const bNorm16 = ['normal', 'normal', 'normal', 'normal'];
+    const bAccQ = ['accent', 'mute', 'mute', 'mute'];
+    const bNormQ = ['normal', 'mute', 'mute', 'mute'];
+
+    const pAll16 = [bAcc16, bNorm16, bNorm16, bNorm16];
+    const pAllE = [['accent', 'normal', 'mute', 'mute'], ['normal', 'normal', 'mute', 'mute'], ['normal', 'normal', 'mute', 'mute'], ['normal', 'normal', 'mute', 'mute']];
+    const pAllN = [['accent', 'mute', 'normal', 'mute'], ['normal', 'mute', 'normal', 'mute'], ['normal', 'mute', 'normal', 'mute'], ['normal', 'mute', 'normal', 'mute']];
+    const pAllA = [['accent', 'mute', 'mute', 'normal'], ['normal', 'mute', 'mute', 'normal'], ['normal', 'mute', 'mute', 'normal'], ['normal', 'mute', 'mute', 'normal']];
+
+    const pQuarters = [bAccQ, bNormQ, bNormQ, bNormQ];
+
+    const buildBeatPattern = (targetBeatIdx, subIdx, isQuartersPlusSub) => {
+      const grid = [
+        ['accent', 'mute', 'mute', 'mute'],
+        ['normal', 'mute', 'mute', 'mute'],
+        ['normal', 'mute', 'mute', 'mute'],
+        ['normal', 'mute', 'mute', 'mute']
+      ];
+      for (let b = 0; b < 4; b++) {
+        if (isQuartersPlusSub) {
+          if (b === targetBeatIdx) {
+            grid[b][subIdx] = 'normal';
+          }
+        } else {
+          for (let s = 1; s < 4; s++) {
+            grid[b][s] = 'normal';
+          }
+          grid[targetBeatIdx][subIdx] = 'mute';
+        }
+      }
+      return grid;
+    };
+
+    return [
+      // Part 1: Foundations
+      { name: "All 16th Notes", type: "1-bar", gridA: pAll16 },
+      { name: "All 'e' Notes", type: "1-bar", gridA: pAllE },
+      { name: "All '&' Notes", type: "1-bar", gridA: pAllN },
+      { name: "All 'a' Notes", type: "1-bar", gridA: pAllA },
+
+      // Part 2: Alternating 2-Bar Loops
+      { name: "Quarter ➔ All 16ths", type: "2-bar", gridA: pQuarters, gridB: pAll16 },
+      { name: "Quarter ➔ All 'e' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllE },
+      { name: "Quarter ➔ All '&' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllN },
+      { name: "Quarter ➔ All 'a' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllA },
+      { name: "All 16ths ➔ All 'e' Notes", type: "2-bar", gridA: pAll16, gridB: pAllE },
+      { name: "All 16ths ➔ All '&' Notes", type: "2-bar", gridA: pAll16, gridB: pAllN },
+      { name: "All 16ths ➔ All 'a' Notes", type: "2-bar", gridA: pAll16, gridB: pAllA },
+
+      // Part 3: Per-Beat Offbeats (Beat 1 to 4 for e, &, a)
+      // Beat 1
+      { name: "Beat 1: Quarters + 'e'", type: "1-bar", gridA: buildBeatPattern(0, 1, true) },
+      { name: "Beat 1: All 16ths ('e' Silent)", type: "1-bar", gridA: buildBeatPattern(0, 1, false) },
+      { name: "Beat 1: Quarters + '&'", type: "1-bar", gridA: buildBeatPattern(0, 2, true) },
+      { name: "Beat 1: All 16ths ('&' Silent)", type: "1-bar", gridA: buildBeatPattern(0, 2, false) },
+      { name: "Beat 1: Quarters + 'a'", type: "1-bar", gridA: buildBeatPattern(0, 3, true) },
+      { name: "Beat 1: All 16ths ('a' Silent)", type: "1-bar", gridA: buildBeatPattern(0, 3, false) },
+
+      // Beat 2
+      { name: "Beat 2: Quarters + 'e'", type: "1-bar", gridA: buildBeatPattern(1, 1, true) },
+      { name: "Beat 2: All 16ths ('e' Silent)", type: "1-bar", gridA: buildBeatPattern(1, 1, false) },
+      { name: "Beat 2: Quarters + '&'", type: "1-bar", gridA: buildBeatPattern(1, 2, true) },
+      { name: "Beat 2: All 16ths ('&' Silent)", type: "1-bar", gridA: buildBeatPattern(1, 2, false) },
+      { name: "Beat 2: Quarters + 'a'", type: "1-bar", gridA: buildBeatPattern(1, 3, true) },
+      { name: "Beat 2: All 16ths ('a' Silent)", type: "1-bar", gridA: buildBeatPattern(1, 3, false) },
+
+      // Beat 3
+      { name: "Beat 3: Quarters + 'e'", type: "1-bar", gridA: buildBeatPattern(2, 1, true) },
+      { name: "Beat 3: All 16ths ('e' Silent)", type: "1-bar", gridA: buildBeatPattern(2, 1, false) },
+      { name: "Beat 3: Quarters + '&'", type: "1-bar", gridA: buildBeatPattern(2, 2, true) },
+      { name: "Beat 3: All 16ths ('&' Silent)", type: "1-bar", gridA: buildBeatPattern(2, 2, false) },
+      { name: "Beat 3: Quarters + 'a'", type: "1-bar", gridA: buildBeatPattern(2, 3, true) },
+      { name: "Beat 3: All 16ths ('a' Silent)", type: "1-bar", gridA: buildBeatPattern(2, 3, false) },
+
+      // Beat 4
+      { name: "Beat 4: Quarters + 'e'", type: "1-bar", gridA: buildBeatPattern(3, 1, true) },
+      { name: "Beat 4: All 16ths ('e' Silent)", type: "1-bar", gridA: buildBeatPattern(3, 1, false) },
+      { name: "Beat 4: Quarters + '&'", type: "1-bar", gridA: buildBeatPattern(3, 2, true) },
+      { name: "Beat 4: All 16ths ('&' Silent)", type: "1-bar", gridA: buildBeatPattern(3, 2, false) },
+      { name: "Beat 4: Quarters + 'a'", type: "1-bar", gridA: buildBeatPattern(3, 3, true) },
+      { name: "Beat 4: All 16ths ('a' Silent)", type: "1-bar", gridA: buildBeatPattern(3, 3, false) }
+    ];
+  }
+
+  applySixteenthsTrainingStepState() {
+    const patterns = this.getSixteenthsTrainingPatterns();
+    const current = patterns[this.sixteenthsCurrentStepIdx];
+    if (!current) return;
+
+    let targetGrid = current.gridA;
+    if (current.type === "2-bar" && (this.sixteenthsBarInStep === 2 || this.sixteenthsBarInStep === 4)) {
+      targetGrid = current.gridB;
+    }
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(targetGrid));
+
+    window.dispatchEvent(new CustomEvent('sixteenths-training-update', {
+      detail: {
+        stepIdx: this.sixteenthsCurrentStepIdx + 1,
+        totalSteps: patterns.length,
+        patternName: current.name,
+        barInStep: this.sixteenthsBarInStep,
+        totalBarsInStep: 4,
+        isBarB: current.type === "2-bar" && (this.sixteenthsBarInStep === 2 || this.sixteenthsBarInStep === 4)
+      }
+    }));
+  }
+
+  advanceSixteenthsTrainingRoutine() {
+    this.sixteenthsBarInStep++;
+
+    const patterns = this.getSixteenthsTrainingPatterns();
+
+    if (this.sixteenthsBarInStep > 4) {
+      this.sixteenthsBarInStep = 1;
+      this.sixteenthsCurrentStepIdx++;
+
+      if (this.sixteenthsCurrentStepIdx >= patterns.length) {
+        this.onSixteenthsTrainingRoutineComplete();
+        return;
+      }
+    }
+
+    this.applySixteenthsTrainingStepState();
+  }
+
+  onSixteenthsTrainingRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+    setTimeout(() => {
+      alert("🎉 16th Rhythm Training Complete! All 35 Patterns Finished.");
     }, 100);
   }
 
