@@ -528,14 +528,51 @@ input[type="range"]::-moz-range-thumb:hover {
 
 .beat-node.active-now {
   transform: scale(1.15);
-  box-shadow: 0 0 16px var(--accent-glow);
+  box-shadow: 0 0 18px var(--accent-glow);
   border-color: #fff !important;
 }
 
+.beat-node[data-state="accent"].active-now {
+  transform: scale(1.18);
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.9);
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.45) !important;
+  color: #ffffff !important;
+}
+
+.beat-node[data-state="accent"].active-now .beat-num,
+.beat-node[data-state="accent"].active-now .beat-icon {
+  color: #ffffff !important;
+}
+
+.beat-node[data-state="normal"].active-now {
+  transform: scale(1.15);
+  box-shadow: 0 0 20px rgba(255, 191, 0, 0.9);
+  border-color: #ffbf00 !important;
+  background: rgba(255, 191, 0, 0.35) !important;
+  color: #ffffff !important;
+}
+
+.beat-node[data-state="normal"].active-now .beat-num,
+.beat-node[data-state="normal"].active-now .beat-icon {
+  color: #ffffff !important;
+}
+
+.beat-node[data-state="weak"].active-now {
+  transform: scale(1.12);
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.85);
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.35) !important;
+}
+
+.beat-node[data-state="mute"].active-now {
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
 .beat-node.subnote-node.active-now {
-  transform: scale(0.95);
-  box-shadow: 0 0 12px var(--accent-glow);
-  border-color: #fff !important;
+  transform: scale(0.98);
 }
 
 /* Dropdowns & Custom Inputs */

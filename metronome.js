@@ -113,6 +113,9 @@ class MetronomeEngine {
     this.practiceElapsedSec = 0;
     this.practiceStopwatchInterval = null;
 
+    // Tempo Change Mute Trainer Override (Plays first 2 bars unmuted when tempo changes)
+    this.tempoChangeUnmuteBarsRemaining = 0;
+
     // Tuning Pitch Drone
     this.droneOsc = null;
     this.droneGain = null;
@@ -164,6 +167,11 @@ class MetronomeEngine {
   }
 
   checkGapMuteState() {
+    if (this.tempoChangeUnmuteBarsRemaining > 0) {
+      this.isBarMuted = false;
+      return;
+    }
+
     if (this.gapTrainerEnabled) {
       const cycleTotal = this.barsPlayed + this.barsMuted;
       const posInCycle = this.currentMeasureCount % cycleTotal;
@@ -198,6 +206,7 @@ class MetronomeEngine {
     this.currentMeasureCount = 0;
     this.rampBarsCompleted = 0;
     this.rampTimeElapsedSec = 0;
+    this.tempoChangeUnmuteBarsRemaining = 0;
     
     this.checkGapMuteState();
 
@@ -253,10 +262,14 @@ class MetronomeEngine {
     } else if (this.inSubdivisionsBreak) {
       this.startSubdivisionsBreakInterval();
     } else {
-      this.nextNoteTime = this.audioCtx.currentTime + 0.05;
-      this.nextPolyTime = this.audioCtx.currentTime + 0.05;
+      if (this.audioCtx) {
+        this.nextNoteTime = this.audioCtx.currentTime + 0.05;
+        this.nextPolyTime = this.audioCtx.currentTime + 0.05;
+      }
       this.scheduler();
-      this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+      if (!this.timerID) {
+        this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+      }
 
       if (this.tempoRampEnabled && this.rampMode === 'time' && !this.subdivisionsRoutineActive) {
         this.startRampTimeTimer();
@@ -281,6 +294,7 @@ class MetronomeEngine {
     this.subdivisionsRoutineActive = false;
     this.eighthsTrainingRoutineActive = false;
     this.sixteenthsTrainingRoutineActive = false;
+    this.tempoChangeUnmuteBarsRemaining = 0;
     if (this.timerID) {
       clearInterval(this.timerID);
       this.timerID = null;
@@ -310,6 +324,13 @@ class MetronomeEngine {
 
   scheduler() {
     if (this.inRoutineBreak || this.inSubdivisionsBreak || this.isPaused) return;
+
+    if (this.audioCtx && this.nextNoteTime < this.audioCtx.currentTime) {
+      this.nextNoteTime = this.audioCtx.currentTime + 0.05;
+    }
+    if (this.audioCtx && this.nextPolyTime < this.audioCtx.currentTime) {
+      this.nextPolyTime = this.audioCtx.currentTime + 0.05;
+    }
 
     while (this.nextNoteTime < this.audioCtx.currentTime + this.scheduleAheadTime) {
       this.scheduleNote(
@@ -400,6 +421,10 @@ class MetronomeEngine {
         }));
       }
       return; // Do NOT increment practice currentMeasureCount during count-in!
+    }
+
+    if (this.tempoChangeUnmuteBarsRemaining > 0) {
+      this.tempoChangeUnmuteBarsRemaining--;
     }
 
     this.currentMeasureCount++;
@@ -535,7 +560,10 @@ class MetronomeEngine {
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
     this.nextPolyTime = this.audioCtx.currentTime + 0.05;
     this.scheduler();
-    this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+    if (!this.timerID) {
+      this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+    }
+    this.startPracticeStopwatch();
 
     window.dispatchEvent(new CustomEvent('subdivisions-break-end'));
   }
@@ -961,7 +989,13 @@ class MetronomeEngine {
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
     this.nextPolyTime = this.audioCtx.currentTime + 0.05;
     this.scheduler();
-    this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+    if (!this.timerID) {
+      this.timerID = setInterval(() => this.scheduler(), this.lookaheadMs);
+    }
+    if (this.tempoRampEnabled && this.rampMode === 'time' && !this.subdivisionsRoutineActive) {
+      this.startRampTimeTimer();
+    }
+    this.startPracticeStopwatch();
 
     window.dispatchEvent(new CustomEvent('routine-break-end'));
   }
@@ -1337,7 +1371,15 @@ class MetronomeEngine {
   }
 
   setTempo(bpm) {
-    this.tempo = Math.min(Math.max(bpm, 20), this.maxTempo);
+    const newBpm = Math.min(Math.max(bpm, 20), this.maxTempo);
+    const tempoChanged = (newBpm !== this.tempo);
+    this.tempo = newBpm;
+
+    if (tempoChanged && (this.isPlaying || this.isPaused)) {
+      this.tempoChangeUnmuteBarsRemaining = 2;
+      this.checkGapMuteState();
+    }
+
     window.dispatchEvent(new CustomEvent('tempo-changed', { detail: { tempo: this.tempo } }));
   }
 
