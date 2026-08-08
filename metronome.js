@@ -99,6 +99,11 @@ class MetronomeEngine {
     this.sixteenthsCurrentStepIdx = 0;
     this.sixteenthsBarInStep = 1;
 
+    // --- 8th Triplet Rhythm Training Preset Routine ---
+    this.tripletsTrainingRoutineActive = false;
+    this.tripletsCurrentStepIdx = 0;
+    this.tripletsBarInStep = 1;
+
     // 2-Bar Count-In Feature
     this.inCountIn = false;
     this.countInBarCount = 1;
@@ -294,6 +299,7 @@ class MetronomeEngine {
     this.subdivisionsRoutineActive = false;
     this.eighthsTrainingRoutineActive = false;
     this.sixteenthsTrainingRoutineActive = false;
+    this.tripletsTrainingRoutineActive = false;
     this.tempoChangeUnmuteBarsRemaining = 0;
     if (this.timerID) {
       clearInterval(this.timerID);
@@ -432,7 +438,9 @@ class MetronomeEngine {
 
     this.checkGapMuteState();
 
-    if (this.sixteenthsTrainingRoutineActive) {
+    if (this.tripletsTrainingRoutineActive) {
+      this.advanceTripletsTrainingRoutine();
+    } else if (this.sixteenthsTrainingRoutineActive) {
       this.advanceSixteenthsTrainingRoutine();
     } else if (this.eighthsTrainingRoutineActive) {
       this.advanceEighthsTrainingRoutine();
@@ -476,7 +484,7 @@ class MetronomeEngine {
   advanceSubdivisionsRoutine() {
     this.subdivisionsBarInStage++;
     
-    if (this.subdivisionsBarInStage > 6) {
+    if (this.subdivisionsBarInStage > 4) {
       this.subdivisionsBarInStage = 1;
       this.subdivisionsCurrentStageIdx++;
 
@@ -538,6 +546,10 @@ class MetronomeEngine {
           }
         }));
 
+        if (this.subdivisionsBreakRemaining <= 5 && this.subdivisionsBreakRemaining > 0) {
+          this.playBreakCountdownBeep(this.subdivisionsBreakRemaining);
+        }
+
         if (this.subdivisionsBreakRemaining <= 0) {
           this.stopSubdivisionsBreakTimer();
           this.resumeSubdivisionsAfterBreak();
@@ -580,7 +592,7 @@ class MetronomeEngine {
     this.setSubdivision(stage.sub);
 
     const isFirstStage = (this.subdivisionsCurrentStageIdx === 0);
-    const playFullSubdivisions = (this.subdivisionsBarInStage === 1 || this.subdivisionsBarInStage === 6);
+    const playFullSubdivisions = (this.subdivisionsBarInStage === 4);
 
     for (let b = 0; b < this.beatsPerMeasure; b++) {
       for (let s = 0; s < this.subdivision; s++) {
@@ -890,6 +902,137 @@ class MetronomeEngine {
     }, 100);
   }
 
+  // --- 8th Triplet Rhythm Training Preset Routine Logic ---
+  startTripletsTrainingRoutine() {
+    this.tripletsTrainingRoutineActive = true;
+    this.sixteenthsTrainingRoutineActive = false;
+    this.eighthsTrainingRoutineActive = false;
+    this.subdivisionsRoutineActive = false;
+    this.tripletsCurrentStepIdx = 0;
+    this.tripletsBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    // Force 4/4 time signature and 8th Triplets subdivision
+    this.beatsPerMeasure = 4;
+    this.subdivision = 3;
+
+    this.applyTripletsTrainingStepState();
+    this.start();
+  }
+
+  getTripletsTrainingPatterns() {
+    const pAllTriplets = [['accent', 'normal', 'normal'], ['normal', 'normal', 'normal'], ['normal', 'normal', 'normal'], ['normal', 'normal', 'normal']];
+    const pAllTrip = [['accent', 'normal', 'mute'], ['normal', 'normal', 'mute'], ['normal', 'normal', 'mute'], ['normal', 'normal', 'mute']];
+    const pAllLet = [['accent', 'mute', 'normal'], ['normal', 'mute', 'normal'], ['normal', 'mute', 'normal'], ['normal', 'mute', 'normal']];
+    const pQuarters = [['accent', 'mute', 'mute'], ['normal', 'mute', 'mute'], ['normal', 'mute', 'mute'], ['normal', 'mute', 'mute']];
+
+    const buildTripletBeatPattern = (targetBeatIdx, subIdx, isQuartersPlusSub) => {
+      const grid = [
+        ['accent', 'mute', 'mute'],
+        ['normal', 'mute', 'mute'],
+        ['normal', 'mute', 'mute'],
+        ['normal', 'mute', 'mute']
+      ];
+      for (let b = 0; b < 4; b++) {
+        if (isQuartersPlusSub) {
+          if (b === targetBeatIdx) {
+            grid[b][subIdx] = 'normal';
+          }
+        } else {
+          for (let s = 1; s < 3; s++) {
+            grid[b][s] = 'normal';
+          }
+          grid[targetBeatIdx][subIdx] = 'mute';
+        }
+      }
+      return grid;
+    };
+
+    return [
+      { name: "All 8th Triplets", type: "1-bar", gridA: pAllTriplets },
+      { name: "All 'trip' Notes (2nd Triplet)", type: "1-bar", gridA: pAllTrip },
+      { name: "All 'let' Notes (3rd Triplet)", type: "1-bar", gridA: pAllLet },
+      { name: "Quarter ➔ All 8th Triplets", type: "2-bar", gridA: pQuarters, gridB: pAllTriplets },
+      { name: "Quarter ➔ 'trip' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllTrip },
+      { name: "Quarter ➔ 'let' Notes", type: "2-bar", gridA: pQuarters, gridB: pAllLet },
+
+      // Beat 1
+      { name: "Beat 1: Quarters + 'trip'", type: "1-bar", gridA: buildTripletBeatPattern(0, 1, true) },
+      { name: "Beat 1: All Triplets ('trip' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(0, 1, false) },
+      { name: "Beat 1: Quarters + 'let'", type: "1-bar", gridA: buildTripletBeatPattern(0, 2, true) },
+      { name: "Beat 1: All Triplets ('let' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(0, 2, false) },
+
+      // Beat 2
+      { name: "Beat 2: Quarters + 'trip'", type: "1-bar", gridA: buildTripletBeatPattern(1, 1, true) },
+      { name: "Beat 2: All Triplets ('trip' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(1, 1, false) },
+      { name: "Beat 2: Quarters + 'let'", type: "1-bar", gridA: buildTripletBeatPattern(1, 2, true) },
+      { name: "Beat 2: All Triplets ('let' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(1, 2, false) },
+
+      // Beat 3
+      { name: "Beat 3: Quarters + 'trip'", type: "1-bar", gridA: buildTripletBeatPattern(2, 1, true) },
+      { name: "Beat 3: All Triplets ('trip' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(2, 1, false) },
+      { name: "Beat 3: Quarters + 'let'", type: "1-bar", gridA: buildTripletBeatPattern(2, 2, true) },
+      { name: "Beat 3: All Triplets ('let' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(2, 2, false) },
+
+      // Beat 4
+      { name: "Beat 4: Quarters + 'trip'", type: "1-bar", gridA: buildTripletBeatPattern(3, 1, true) },
+      { name: "Beat 4: All Triplets ('trip' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(3, 1, false) },
+      { name: "Beat 4: Quarters + 'let'", type: "1-bar", gridA: buildTripletBeatPattern(3, 2, true) },
+      { name: "Beat 4: All Triplets ('let' Silent)", type: "1-bar", gridA: buildTripletBeatPattern(3, 2, false) }
+    ];
+  }
+
+  applyTripletsTrainingStepState() {
+    const patterns = this.getTripletsTrainingPatterns();
+    const current = patterns[this.tripletsCurrentStepIdx];
+    if (!current) return;
+
+    let targetGrid = current.gridA;
+    if (current.type === "2-bar" && (this.tripletsBarInStep === 2 || this.tripletsBarInStep === 4)) {
+      targetGrid = current.gridB;
+    }
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(targetGrid));
+
+    window.dispatchEvent(new CustomEvent('triplets-training-update', {
+      detail: {
+        stepIdx: this.tripletsCurrentStepIdx + 1,
+        totalSteps: patterns.length,
+        patternName: current.name,
+        barInStep: this.tripletsBarInStep,
+        totalBarsInStep: 4,
+        isBarB: current.type === "2-bar" && (this.tripletsBarInStep === 2 || this.tripletsBarInStep === 4)
+      }
+    }));
+  }
+
+  advanceTripletsTrainingRoutine() {
+    this.tripletsBarInStep++;
+
+    const patterns = this.getTripletsTrainingPatterns();
+
+    if (this.tripletsBarInStep > 4) {
+      this.tripletsBarInStep = 1;
+      this.tripletsCurrentStepIdx++;
+
+      if (this.tripletsCurrentStepIdx >= patterns.length) {
+        this.onTripletsTrainingRoutineComplete();
+        return;
+      }
+    }
+
+    this.applyTripletsTrainingStepState();
+  }
+
+  onTripletsTrainingRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+    setTimeout(() => {
+      alert("🎉 8th Triplet Rhythm Training Complete! All 22 Patterns Finished.");
+    }, 100);
+  }
+
   startRampTimeTimer() {
     this.stopRampTimeTimer();
     this.rampTimerInterval = setInterval(() => {
@@ -968,6 +1111,10 @@ class MetronomeEngine {
             remaining: this.routineBreakRemaining
           }
         }));
+
+        if (this.routineBreakRemaining <= 5 && this.routineBreakRemaining > 0) {
+          this.playBreakCountdownBeep(this.routineBreakRemaining);
+        }
 
         if (this.routineBreakRemaining <= 0) {
           this.stopRoutineBreakTimer();
@@ -1052,6 +1199,10 @@ class MetronomeEngine {
       return;
     }
 
+    if (beat === 0 && subStep === 0 && this.isLastBarOfSession()) {
+      this.playLastBarChime(time);
+    }
+
     if (this.isBarMuted || subState === 'mute') return;
 
     let freq = 800;
@@ -1069,6 +1220,89 @@ class MetronomeEngine {
     }
 
     this.playSyntheticTone(freq, time, noteVol, isMainBeat);
+  }
+
+  isLastBarOfSession() {
+    const barDurationSec = (60.0 / this.tempo) * this.beatsPerMeasure;
+
+    if (this.subdivisionsRoutineActive) {
+      return (this.subdivisionsBarInStage === 4);
+    }
+    if (this.eighthsTrainingRoutineActive) {
+      return (this.eighthsBarInStep === 4);
+    }
+    if (this.sixteenthsTrainingRoutineActive) {
+      return (this.sixteenthsBarInStep === 4);
+    }
+    if (this.tripletsTrainingRoutineActive) {
+      return (this.tripletsBarInStep === 4);
+    }
+
+    if (this.tempoRampEnabled) {
+      if (this.rampMode === 'time' && this.rampEveryTimeSec > 0) {
+        const remInTempoStep = this.rampEveryTimeSec - (this.rampTimeElapsedSec % this.rampEveryTimeSec);
+        if (remInTempoStep <= barDurationSec + 0.5) return true;
+
+        if (this.routineActive && this.rampTotalDurationSec > 0) {
+          const remInRun = this.rampTotalDurationSec - this.rampTimeElapsedSec;
+          if (remInRun <= barDurationSec + 0.5) return true;
+        }
+      } else if (this.rampMode === 'bars' && this.rampEveryBars > 0) {
+        if ((this.rampBarsCompleted + 1) % this.rampEveryBars === 0) return true;
+      }
+    }
+
+    if (this.timerMode === 'countdown' && this.sessionTimerDuration > 0) {
+      if (this.sessionTimeRemaining > 0 && this.sessionTimeRemaining <= barDurationSec + 0.5) return true;
+    }
+
+    return false;
+  }
+
+  playLastBarChime(time) {
+    if (!this.audioCtx) return;
+    const masterVol = this.masterVolume;
+    const osc1 = this.audioCtx.createOscillator();
+    const osc2 = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(1800, time);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(2400, time);
+
+    gain.gain.setValueAtTime(0.85 * masterVol, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.audioCtx.destination);
+
+    osc1.start(time);
+    osc2.start(time);
+    osc1.stop(time + 0.35);
+    osc2.stop(time + 0.35);
+  }
+
+  playBreakCountdownBeep(sec) {
+    if (!this.audioCtx) return;
+    const now = this.audioCtx.currentTime;
+    const masterVol = this.masterVolume;
+    const freq = (sec === 1 ? 1200 : 800);
+    const osc = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+
+    gain.gain.setValueAtTime(0.7 * masterVol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(this.audioCtx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.12);
   }
 
   schedulePolyNote(polyBeat, time) {

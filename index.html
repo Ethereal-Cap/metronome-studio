@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Apex Metronome Studio v1.3</title>
+  <title>Apex Metronome Studio v1.32</title>
   <meta name="theme-color" content="#121214">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="styles.css?v=1.31">
+  <link rel="stylesheet" href="styles.css?v=1.32">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -419,7 +419,7 @@
 
   <!-- Footer Keyboard Helpers -->
   <footer class="app-footer">
-    <div>Apex Metronome Studio v1.3 • Standalone Offline Web App</div>
+    <div>Apex Metronome Studio v1.32 • Standalone Offline Web App</div>
     <div class="hotkey-list">
       <span><span class="kbd-badge">Space</span> Start/Stop</span>
       <span><span class="kbd-badge">P</span> Pause/Resume</span>
@@ -446,10 +446,31 @@
         <p><strong>🔒 Preset Deletion Protection:</strong> Admin verification required to delete presets.</p>
       </div>
     </div>
-  </footer>
+  </div>
+
+  <!-- Admin Password Verification Modal -->
+  <div id="modalPassword" class="modal-overlay">
+    <div class="modal-body" style="max-width: 380px; text-align: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="modal-title" style="font-weight: 700; color: var(--accent-primary); font-size: 1.1rem;">🔒 Admin Verification</div>
+        <button id="btnClosePasswordModal" class="btn-close-modal">✕</button>
+      </div>
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px;">
+        Enter Admin Password to delete preset:
+      </p>
+      <input type="password" id="inputAdminPassword" class="custom-input" placeholder="Password..." style="width: 100%; text-align: center; margin-bottom: 10px; font-size: 1rem;">
+      <div id="passwordErrorMsg" style="color: #ef4444; font-size: 0.82rem; font-weight: 600; display: none; margin-bottom: 12px;">
+        ❌ Incorrect Password. Please try again.
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 5px;">
+        <button id="btnSubmitPassword" class="btn-bump" style="background: var(--accent-primary); color: #000; flex: 1; font-weight: 700; padding: 8px;">Submit</button>
+        <button id="btnCancelPassword" class="btn-bump" style="background: rgba(255, 255, 255, 0.06); color: var(--text-color); border: 1px solid var(--border-color); flex: 1; padding: 8px;">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Attach JavaScript Engine & Controllers -->
-  <script src="metronome.js?v=1.31"></script>
+  <script src="metronome.js?v=1.32"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // Elements
@@ -523,7 +544,7 @@
           const totalTempos = metronome.subdivisionsTempos.length;
           const timeFormatted = formatMMSS(metronome.practiceElapsedSec || 0);
 
-          mainStatusBar.textContent = `Subdivisions (${metronome.tempo} BPM • ${tempoIdx}/${totalTempos}) • Stage ${stageIdx}/${totalStages} (${stageName}) • Bar ${barInStage}/6 • ${timeFormatted === '--:--' ? '00:00' : timeFormatted}`;
+          mainStatusBar.textContent = `Subdivisions (${metronome.tempo} BPM • ${tempoIdx}/${totalTempos}) • Stage ${stageIdx}/${totalStages} (${stageName}) • Bar ${barInStage}/4 • ${timeFormatted === '--:--' ? '00:00' : timeFormatted}`;
           mainStatusBar.style.color = 'var(--accent-primary)';
           return;
         }
@@ -892,7 +913,7 @@
           densityText = "Subdivisions ON";
         }
 
-        mainStatusBar.textContent = `Tempo ${tempoIdx}/${totalTempos} (${currentBpm} BPM) • Stage ${stageIdx}/${totalStages} (${stageName}) • Bar ${barInStage}/6 [${densityText}]`;
+        mainStatusBar.textContent = `Tempo ${tempoIdx}/${totalTempos} (${currentBpm} BPM) • Stage ${stageIdx}/${totalStages} (${stageName}) • Bar ${barInStage}/4 [${densityText}]`;
         mainStatusBar.style.color = isMutedQuarterBar ? '#ef4444' : (playFullSubdivisions ? 'var(--accent-secondary)' : '#f59e0b');
       });
 
@@ -914,6 +935,12 @@
           id: "sixteenths_rhythm_training",
           name: "16th Rhythm Training",
           isSixteenthsRoutine: true,
+          isBuiltin: true
+        },
+        {
+          id: "triplets_rhythm_training",
+          name: "8th Triplet Rhythm Training",
+          isTripletsRoutine: true,
           isBuiltin: true
         },
         {
@@ -1081,6 +1108,12 @@
           return;
         }
 
+        if (p.isTripletsRoutine) {
+          metronome.startTripletsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
         if (p.isEighthsRoutine) {
           metronome.startEighthsTrainingRoutine();
           document.getElementById('btnTabTrainers').click();
@@ -1099,13 +1132,26 @@
             return;
           }
 
-          // Randomly select up to 3 uncompleted tempos
+          // Randomly select up to 3 uncompleted tempos with at least 10 BPM gap
           const selected = [];
-          const pool = [...uncompleted];
-          const count = Math.min(3, pool.length);
-          for (let i = 0; i < count; i++) {
-            const randIdx = Math.floor(Math.random() * pool.length);
-            selected.push(pool.splice(randIdx, 1)[0]);
+          let candidates = [...uncompleted];
+
+          while (selected.length < 3 && candidates.length > 0) {
+            const validWithGap = candidates.filter(cand => 
+              selected.every(sel => Math.abs(cand - sel) >= 10)
+            );
+
+            if (validWithGap.length > 0) {
+              const randIdx = Math.floor(Math.random() * validWithGap.length);
+              const chosen = validWithGap[randIdx];
+              selected.push(chosen);
+              candidates = candidates.filter(cand => cand !== chosen);
+            } else {
+              const randIdx = Math.floor(Math.random() * candidates.length);
+              const chosen = candidates[randIdx];
+              selected.push(chosen);
+              candidates = candidates.filter(cand => cand !== chosen);
+            }
           }
 
           alert(`🎯 Subdivisions Session Selected Tempos:\n👉 ${selected.join(' BPM, ')} BPM\n\n(30-Second Silence Break between each tempo)\n\nStarting Session...`);
@@ -1192,6 +1238,8 @@
 
           if (p.isSixteenthsRoutine) {
             descText = `Interactive Training • 35 Patterns (4 Bars Each, 140 Bars Total)`;
+          } else if (p.isTripletsRoutine) {
+            descText = `Interactive Training • 22 Patterns (4 Bars Each, 88 Bars Total)`;
           } else if (p.isEighthsRoutine) {
             descText = `Interactive Training • 12 Patterns (4 Bars Each, 48 Bars Total)`;
           } else if (p.isSubdivisionsRoutine) {
@@ -1213,20 +1261,16 @@
           item.querySelector('[data-del-id]').addEventListener('click', (e) => {
             e.stopPropagation();
 
-            const enteredPwd = prompt("🔒 Enter Admin Password to delete preset:");
-            if (enteredPwd !== "ArtisanOfGore") {
-              alert("⚠️ Incorrect Password! Preset deletion locked.");
-              return;
-            }
-
             if (p.isBuiltin) {
               alert("⚠️ Built-in default presets cannot be deleted.");
               return;
             }
 
-            const currentCustom = getUserCustomPresets().filter(item => (item.id || item.name) !== (p.id || p.name));
-            localStorage.setItem('apex_metronome_user_presets', JSON.stringify(currentCustom));
-            renderPresetsUI();
+            openPasswordModal(() => {
+              const currentCustom = getUserCustomPresets().filter(item => (item.id || item.name) !== (p.id || p.name));
+              localStorage.setItem('apex_metronome_user_presets', JSON.stringify(currentCustom));
+              renderPresetsUI();
+            });
           });
 
           presetList.appendChild(item);
@@ -1464,6 +1508,18 @@
         mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
       });
 
+      window.addEventListener('triplets-training-update', (e) => {
+        const { stepIdx, totalSteps, patternName, barInStep, totalBarsInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `8th Triplet Training • Step ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
       function resetAppToDefaults() {
         metronome.stop();
         metronome.eighthsTrainingRoutineActive = false;
@@ -1472,6 +1528,9 @@
         metronome.sixteenthsTrainingRoutineActive = false;
         metronome.sixteenthsCurrentStepIdx = 0;
         metronome.sixteenthsBarInStep = 1;
+        metronome.tripletsTrainingRoutineActive = false;
+        metronome.tripletsCurrentStepIdx = 0;
+        metronome.tripletsBarInStep = 1;
         metronome.tempo = 120;
         metronome.beatsPerMeasure = 4;
         metronome.subdivision = 1;
@@ -1570,6 +1629,57 @@
       const modalHelp = document.getElementById('modalHelp');
       document.getElementById('btnOpenHelp').addEventListener('click', () => modalHelp.classList.add('open'));
       document.getElementById('btnCloseHelp').addEventListener('click', () => modalHelp.classList.remove('open'));
+
+      // Password Modal Handlers
+      let pendingPasswordAction = null;
+      const modalPassword = document.getElementById('modalPassword');
+      const inputAdminPassword = document.getElementById('inputAdminPassword');
+      const passwordErrorMsg = document.getElementById('passwordErrorMsg');
+      const btnSubmitPassword = document.getElementById('btnSubmitPassword');
+      const btnCancelPassword = document.getElementById('btnCancelPassword');
+      const btnClosePasswordModal = document.getElementById('btnClosePasswordModal');
+
+      function openPasswordModal(onSuccess) {
+        pendingPasswordAction = onSuccess;
+        inputAdminPassword.value = '';
+        passwordErrorMsg.style.display = 'none';
+        modalPassword.classList.add('open');
+        setTimeout(() => inputAdminPassword.focus(), 100);
+      }
+
+      function closePasswordModal() {
+        modalPassword.classList.remove('open');
+        pendingPasswordAction = null;
+        inputAdminPassword.value = '';
+        passwordErrorMsg.style.display = 'none';
+      }
+
+      function submitPassword() {
+        if (!pendingPasswordAction) return;
+        if (inputAdminPassword.value === "ArtisanOfGore") {
+          const action = pendingPasswordAction;
+          closePasswordModal();
+          action();
+        } else {
+          passwordErrorMsg.style.display = 'block';
+          inputAdminPassword.value = '';
+          inputAdminPassword.focus();
+        }
+      }
+
+      if (btnSubmitPassword) btnSubmitPassword.addEventListener('click', submitPassword);
+      if (btnCancelPassword) btnCancelPassword.addEventListener('click', closePasswordModal);
+      if (btnClosePasswordModal) btnClosePasswordModal.addEventListener('click', closePasswordModal);
+      if (inputAdminPassword) {
+        inputAdminPassword.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitPassword();
+          } else if (e.key === 'Escape') {
+            closePasswordModal();
+          }
+        });
+      }
     });
   </script>
 </body>
