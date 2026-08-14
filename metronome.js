@@ -65,7 +65,7 @@ class MetronomeEngine {
     this.routineActive = false;
     this.routineRunCount = 0;
     this.routineMaxRuns = 3;
-    this.routineBreakSec = 120; // 2 minutes break
+    this.routineBreakSec = 60; // 1 minute break
     this.inRoutineBreak = false;
     this.routineBreakRemaining = 0;
     this.routineBreakInterval = null;
@@ -77,7 +77,7 @@ class MetronomeEngine {
     this.subdivisionsCurrentStageIdx = 0; // 0 to 6 (7 stages)
     this.subdivisionsBarInStage = 1; // 1 to 6 bars
     this.inSubdivisionsBreak = false;
-    this.subdivisionsBreakRemaining = 30; // 30 seconds break between tempos
+    this.subdivisionsBreakRemaining = 15; // 15 seconds break between tempos
     this.subdivisionsBreakInterval = null;
     this.subdivisionsStages = [
       { name: "Quarter Notes", sub: 1 },
@@ -148,14 +148,20 @@ class MetronomeEngine {
     const oldGrid = keepExisting ? this.subdivisionGrid : [];
     this.subdivisionGrid = [];
 
+    const numSubSteps = Math.max(1, Math.round(this.subdivision));
+
     for (let b = 0; b < this.beatsPerMeasure; b++) {
       const beatRow = [];
-      for (let s = 0; s < this.subdivision; s++) {
+      for (let s = 0; s < numSubSteps; s++) {
         if (oldGrid[b] && oldGrid[b][s] !== undefined) {
           beatRow.push(oldGrid[b][s]);
         } else {
           if (s === 0) {
-            beatRow.push(b === 0 ? 'accent' : 'normal');
+            if (this.subdivision === 0.5) {
+              beatRow.push(b % 2 === 0 ? (b === 0 ? 'accent' : 'normal') : 'mute');
+            } else {
+              beatRow.push(b === 0 ? 'accent' : 'normal');
+            }
           } else {
             beatRow.push('normal');
           }
@@ -358,14 +364,14 @@ class MetronomeEngine {
   advanceNote() {
     const secondsPerBeat = 60.0 / this.tempo;
     
-    const effSubdivision = this.inCountIn ? 1 : this.subdivision;
+    const effSubdivision = (this.inCountIn || this.subdivision < 1) ? 1 : this.subdivision;
     let stepDuration = secondsPerBeat / effSubdivision;
     if (!this.inCountIn && this.subdivision === 2) {
       const swingRatio = this.swing / 100.0;
       if (this.currentSubdivisionStep % 2 === 0) {
-        stepDuration = secondsPerBeat * (swingRatio * 2);
+        stepDuration = secondsPerBeat * swingRatio;
       } else {
-        stepDuration = secondsPerBeat * ((1 - swingRatio) * 2);
+        stepDuration = secondsPerBeat * (1.0 - swingRatio);
       }
     }
 
@@ -508,7 +514,7 @@ class MetronomeEngine {
 
   startSubdivisionsInterTempoBreak() {
     this.inSubdivisionsBreak = true;
-    this.subdivisionsBreakRemaining = 30; // 30 seconds silence
+    this.subdivisionsBreakRemaining = 15; // 15 seconds silence
 
     if (this.timerID) {
       clearInterval(this.timerID);
@@ -569,6 +575,11 @@ class MetronomeEngine {
     this.setTempo(nextBpm);
     this.applySubdivisionsStageState();
 
+    // Enable 1-bar count-in before new tempo plays
+    this.inCountIn = true;
+    this.countInBarCount = 1;
+    this.countInTotalBars = 1;
+
     this.nextNoteTime = this.audioCtx.currentTime + 0.05;
     this.nextPolyTime = this.audioCtx.currentTime + 0.05;
     this.scheduler();
@@ -577,6 +588,9 @@ class MetronomeEngine {
     }
     this.startPracticeStopwatch();
 
+    window.dispatchEvent(new CustomEvent('count-in-start', {
+      detail: { countInBar: 1, totalCountInBars: 1 }
+    }));
     window.dispatchEvent(new CustomEvent('subdivisions-break-end'));
   }
 
@@ -630,22 +644,30 @@ class MetronomeEngine {
     this.playSessionEndChime();
 
     setTimeout(() => {
-      const enteredPwd = prompt("🎉 Subdivisions Session Complete!\n🔒 Enter Admin Password to log these 3 tempos as completed:");
-      if (enteredPwd === "ArtisanOfGore") {
-        window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
-          detail: {
-            completedTempos: this.subdivisionsTempos,
-            verified: true
-          }
-        }));
-      } else {
-        alert("⚠️ Incorrect password or cancelled. These tempos were NOT marked as completed.");
-        window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
-          detail: {
-            completedTempos: this.subdivisionsTempos,
-            verified: false
-          }
-        }));
+      let promptMsg = "🎉 Subdivisions Session Complete!\n🔒 Enter Admin Password to log these 3 tempos as completed:";
+      while (true) {
+        const enteredPwd = prompt(promptMsg);
+        if (enteredPwd === null) {
+          alert("⚠️ Cancelled. These tempos were NOT marked as completed.");
+          window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
+            detail: {
+              completedTempos: this.subdivisionsTempos,
+              verified: false
+            }
+          }));
+          break;
+        } else if (enteredPwd === "ArtisanOfGore") {
+          alert("✅ Admin Verified! 3 Tempos successfully saved.");
+          window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
+            detail: {
+              completedTempos: this.subdivisionsTempos,
+              verified: true
+            }
+          }));
+          break;
+        } else {
+          promptMsg = "❌ WRONG PASSWORD! Please try again.\n🔒 Enter Admin Password (or click Cancel to skip):";
+        }
       }
     }, 100);
   }
@@ -1040,7 +1062,25 @@ class MetronomeEngine {
 
       this.rampTimeElapsedSec++;
 
-      if (this.rampEveryTimeSec > 0 && this.rampTimeElapsedSec % this.rampEveryTimeSec === 0) {
+      if (this.rampSchedule && this.rampSchedule.length > 0) {
+        let cumulativeSec = 0;
+        let currentStepObj = null;
+
+        for (let i = 0; i < this.rampSchedule.length; i++) {
+          const step = this.rampSchedule[i];
+          cumulativeSec += step.durationSec;
+          if (this.rampTimeElapsedSec < cumulativeSec) {
+            currentStepObj = step;
+            break;
+          }
+        }
+
+        if (currentStepObj) {
+          if (this.tempo !== currentStepObj.bpm) {
+            this.setTempo(currentStepObj.bpm);
+          }
+        }
+      } else if (this.rampEveryTimeSec > 0 && this.rampTimeElapsedSec % this.rampEveryTimeSec === 0) {
         if (this.tempo < this.rampTargetTempo) {
           let inc = this.rampIncrement;
           if (this.tempo === 130 && this.rampTargetTempo === 135) {
@@ -1185,12 +1225,12 @@ class MetronomeEngine {
     };
 
     const delayMs = (time - this.audioCtx.currentTime) * 1000;
-    if (delayMs <= 8) {
+    if (delayMs <= 12) {
       requestAnimationFrame(dispatchTick);
     } else {
       setTimeout(() => {
         requestAnimationFrame(dispatchTick);
-      }, delayMs - 8);
+      }, Math.max(0, delayMs - 12));
     }
 
     if (this.inCountIn) {
@@ -1239,13 +1279,24 @@ class MetronomeEngine {
     }
 
     if (this.tempoRampEnabled) {
-      if (this.rampMode === 'time' && this.rampEveryTimeSec > 0) {
-        const remInTempoStep = this.rampEveryTimeSec - (this.rampTimeElapsedSec % this.rampEveryTimeSec);
-        if (remInTempoStep <= barDurationSec + 0.5) return true;
+      if (this.rampMode === 'time') {
+        if (this.rampSchedule && this.rampSchedule.length > 0) {
+          let cumulativeSec = 0;
+          for (let i = 0; i < this.rampSchedule.length; i++) {
+            cumulativeSec += this.rampSchedule[i].durationSec;
+            const remInStep = cumulativeSec - this.rampTimeElapsedSec;
+            if (remInStep > 0 && remInStep <= barDurationSec + 0.5) {
+              return true;
+            }
+          }
+        } else if (this.rampEveryTimeSec > 0) {
+          const remInTempoStep = this.rampEveryTimeSec - (this.rampTimeElapsedSec % this.rampEveryTimeSec);
+          if (remInTempoStep <= barDurationSec + 0.5) return true;
 
-        if (this.routineActive && this.rampTotalDurationSec > 0) {
-          const remInRun = this.rampTotalDurationSec - this.rampTimeElapsedSec;
-          if (remInRun <= barDurationSec + 0.5) return true;
+          if (this.routineActive && this.rampTotalDurationSec > 0) {
+            const remInRun = this.rampTotalDurationSec - this.rampTimeElapsedSec;
+            if (remInRun <= barDurationSec + 0.5) return true;
+          }
         }
       } else if (this.rampMode === 'bars' && this.rampEveryBars > 0) {
         if ((this.rampBarsCompleted + 1) % this.rampEveryBars === 0) return true;
@@ -1623,7 +1674,7 @@ class MetronomeEngine {
   }
 
   setSubdivision(s) {
-    this.subdivision = parseInt(s, 10);
+    this.subdivision = parseFloat(s);
     this.initSubdivisionGrid(false);
   }
 }

@@ -72,11 +72,6 @@
         </div>
       </div>
 
-      <!-- Swinging Pendulum Canvas -->
-      <div class="visual-section">
-        <canvas id="pendulumCanvas" width="480" height="220"></canvas>
-      </div>
-
       <!-- Main Action Buttons (START / STOP, PAUSE / RESUME, TAP TEMPO) -->
       <div class="primary-actions-bar" style="grid-template-columns: 1.2fr 1fr 1fr;">
         <button id="btnPlayMaster" class="btn-play-master">
@@ -107,16 +102,25 @@
             <option value="3">3/4 (Waltz)</option>
             <option value="4" selected>4/4 (Common)</option>
             <option value="5">5/4 (Take Five)</option>
-            <option value="6">6/8 (Compound Dual)</option>
-            <option value="7">7/8 (Odd Meter)</option>
-            <option value="9">9/8 (Triple Compound)</option>
-            <option value="12">12/8 (Blues / Ballad)</option>
+            <option value="6">6/4 (Sextuple)</option>
+            <option value="7">7/4 (Odd Meter)</option>
+            <option value="8">8/4 (Octuple)</option>
+            <option value="9">9/4 (Nonuple)</option>
+            <option value="10">10/4 (Decuple)</option>
+            <option value="11">11/4 (Undecuple)</option>
+            <option value="12">12/4 (Dodecuple)</option>
+            <option value="13">13/4 (Tridecuple)</option>
+            <option value="14">14/4 (Tetradecuple)</option>
+            <option value="15">15/4 (Pentadecuple)</option>
+            <option value="16">16/4 (Hexadecuple)</option>
+            <option value="17">17/4 (Heptadecuple)</option>
           </select>
         </div>
 
         <div class="control-group">
           <label>Subdivision</label>
           <select id="subdivisionSelect" class="custom-select">
+            <option value="0.5">Half Notes (0.5x)</option>
             <option value="1" selected>Quarter Notes (1x)</option>
             <option value="2">Eighth Notes (2x)</option>
             <option value="3">Eighth Triplets (3x)</option>
@@ -438,7 +442,7 @@
         <button id="btnCloseHelp" class="btn-close-modal">✕</button>
       </div>
       <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 10px;">
-        <p><strong>🎼 Subdivisions Preset Routine:</strong> Picks 3 random uncompleted tempos between 30-150. Plays 7 subdivision stages (6 bars each) per tempo with 30-sec breaks in between. Pass code verification prompt required at the end to log tempos as done!</p>
+        <p><strong>🎼 Subdivisions Preset Routine:</strong> Picks 3 random uncompleted tempos between 30-150. Plays 7 subdivision stages (4 bars each) per tempo with 15-sec breaks in between. Pass code verification prompt required at the end to log tempos as done!</p>
         <p><strong>🌐 Direct GitHub Sync:</strong> Paste your GitHub Personal Token once in Tab 2 to save progress directly to GitHub from your laptop or phone without Python!</p>
         <p><strong>🎯 Mute / Gap Trainer:</strong> Mutes designated bars during playback (e.g., 2 played, 3 muted) to improve internal rhythm stability.</p>
         <p><strong>📈 Independent Tempo Ramp:</strong> Set custom Start BPM and End BPM. Choose Bar mode or Time mode (e.g., +10 BPM every 1 min till 5 min)!</p>
@@ -491,8 +495,6 @@
       const timeSignatureSelect = document.getElementById('timeSignatureSelect');
       const subdivisionSelect = document.getElementById('subdivisionSelect');
       const soundSetSelect = document.getElementById('soundSetSelect');
-      const canvas = document.getElementById('pendulumCanvas');
-      const ctx = canvas.getContext('2d');
       const flashOverlay = document.getElementById('flashOverlay');
       const screenFlashToggle = document.getElementById('screenFlashToggle');
 
@@ -530,7 +532,7 @@
           const nextBpm = metronome.subdivisionsTempos[metronome.subdivisionsCurrentTempoIdx];
           const nextTempoIdx = metronome.subdivisionsCurrentTempoIdx + 1;
           const totalTempos = metronome.subdivisionsTempos.length;
-          mainStatusBar.textContent = `⏸️ 30-Sec Break before Tempo ${nextTempoIdx}/${totalTempos} (${nextBpm} BPM): 00:${remainingSec.toString().padStart(2, '0')}`;
+          mainStatusBar.textContent = `⏸️ 15-Sec Break before Tempo ${nextTempoIdx}/${totalTempos} (${nextBpm} BPM): 00:${remainingSec.toString().padStart(2, '0')}`;
           mainStatusBar.style.color = '#f59e0b';
           return;
         }
@@ -629,6 +631,7 @@
       btnTapTempo.addEventListener('click', () => metronome.tap());
 
       function getNoteDisplayLabel(beatIdx, subStep, subdivision) {
+        if (subdivision === 0.5) return (beatIdx % 2 === 0) ? `${beatIdx + 1}` : `½`;
         if (subStep === 0) return `${beatIdx + 1}`;
         
         if (subdivision === 2) return `&`;
@@ -665,6 +668,8 @@
             node.setAttribute('data-beat', b);
             node.setAttribute('data-substep', s);
             node.setAttribute('data-state', state);
+            node._beat = b;
+            node._substep = s;
 
             let icon = '●';
             if (state === 'accent') icon = '⚡';
@@ -721,11 +726,15 @@
         const { beat, subStep, accentState, isBarMuted, measureCount } = e.detail;
 
         const nodes = beatGrid.children;
-        Array.from(nodes).forEach(n => {
-          const cb = parseInt(n.getAttribute('data-beat'), 10);
-          const cs = parseInt(n.getAttribute('data-substep'), 10);
-          n.classList.toggle('active-now', cb === beat && cs === subStep);
-        });
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          const isActive = (n._beat === beat && n._substep === subStep);
+          if (isActive) {
+            if (!n.classList.contains('active-now')) n.classList.add('active-now');
+          } else {
+            if (n.classList.contains('active-now')) n.classList.remove('active-now');
+          }
+        }
 
         if (beat === 0 && subStep === 0) {
           updateMainStatusBar(measureCount, isBarMuted);
@@ -956,8 +965,92 @@
           isBuiltin: true
         },
         {
-          id: "full_hand",
+          id: "new_full_leg",
+          name: "Full Leg",
+          tempo: 135,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          gapEnabled: true,
+          barsPlayed: 2,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 135,
+          rampTarget: 100,
+          rampInc: 10,
+          rampSchedule: [
+            { bpm: 135, durationSec: 90 },
+            { bpm: 130, durationSec: 90 },
+            { bpm: 120, durationSec: 40 },
+            { bpm: 110, durationSec: 40 },
+            { bpm: 100, durationSec: 40 }
+          ],
+          rampTotalMin: 5.666667,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 60,
+          isBuiltin: true
+        },
+        {
+          id: "new_full_hand",
           name: "Full Hand",
+          tempo: 160,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          gapEnabled: true,
+          barsPlayed: 2,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 160,
+          rampTarget: 120,
+          rampInc: 10,
+          rampSchedule: [
+            { bpm: 160, durationSec: 90 },
+            { bpm: 150, durationSec: 90 },
+            { bpm: 140, durationSec: 40 },
+            { bpm: 130, durationSec: 40 },
+            { bpm: 120, durationSec: 40 }
+          ],
+          rampTotalMin: 5.666667,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 60,
+          isBuiltin: true
+        },
+        {
+          id: "new_full_fingers",
+          name: "Full Fingers",
+          tempo: 160,
+          beats: 4,
+          sub: 1,
+          sound: "woodblock",
+          gapEnabled: true,
+          barsPlayed: 2,
+          barsMuted: 3,
+          rampEnabled: true,
+          rampMode: "time",
+          rampStart: 160,
+          rampTarget: 120,
+          rampInc: 10,
+          rampSchedule: [
+            { bpm: 160, durationSec: 90 },
+            { bpm: 150, durationSec: 90 },
+            { bpm: 140, durationSec: 40 },
+            { bpm: 130, durationSec: 40 },
+            { bpm: 120, durationSec: 40 }
+          ],
+          rampTotalMin: 5.666667,
+          routineActive: true,
+          routineMaxRuns: 3,
+          routineBreakSec: 60,
+          isBuiltin: true
+        },
+        {
+          id: "full_hand",
+          name: "OG Full Hand",
           tempo: 120,
           beats: 4,
           sub: 1,
@@ -974,12 +1067,12 @@
           rampTotalMin: 5,
           routineActive: true,
           routineMaxRuns: 3,
-          routineBreakSec: 120,
+          routineBreakSec: 60,
           isBuiltin: true
         },
         {
           id: "full_fingers",
-          name: "Full Fingers",
+          name: "OG Full Fingers",
           tempo: 110,
           beats: 4,
           sub: 1,
@@ -996,12 +1089,12 @@
           rampTotalMin: 5,
           routineActive: true,
           routineMaxRuns: 3,
-          routineBreakSec: 120,
+          routineBreakSec: 60,
           isBuiltin: true
         },
         {
           id: "hand_single",
-          name: "Hand Single",
+          name: "OG Hand Single",
           tempo: 120,
           beats: 4,
           sub: 1,
@@ -1017,11 +1110,12 @@
           rampEveryMin: 1,
           rampTotalMin: 5,
           routineActive: false,
+          routineBreakSec: 60,
           isBuiltin: true
         },
         {
           id: "full_leg",
-          name: "Full Leg",
+          name: "OG Full Leg",
           tempo: 100,
           beats: 4,
           sub: 1,
@@ -1038,12 +1132,12 @@
           rampTotalMin: 5,
           routineActive: true,
           routineMaxRuns: 3,
-          routineBreakSec: 120,
+          routineBreakSec: 60,
           isBuiltin: true
         },
         {
           id: "leg_single",
-          name: "Leg Single",
+          name: "OG Leg Single",
           tempo: 100,
           beats: 4,
           sub: 1,
@@ -1059,6 +1153,7 @@
           rampEveryMin: 1,
           rampTotalMin: 5,
           routineActive: false,
+          routineBreakSec: 60,
           isBuiltin: true
         },
         {
@@ -1095,6 +1190,11 @@
         return [];
       }
 
+      function getRandomPresetTimeSignature() {
+        const allowed = [2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+        return allowed[Math.floor(Math.random() * allowed.length)];
+      }
+
       function getAllPresets() {
         return [...BUILTIN_DEFAULT_PRESETS, ...getUserCustomPresets()];
       }
@@ -1102,41 +1202,27 @@
       function applyPreset(p) {
         resetAppToDefaults();
 
-        if (p.isSixteenthsRoutine) {
-          metronome.startSixteenthsTrainingRoutine();
-          document.getElementById('btnTabTrainers').click();
-          return;
-        }
-
-        if (p.isTripletsRoutine) {
-          metronome.startTripletsTrainingRoutine();
-          document.getElementById('btnTabTrainers').click();
-          return;
-        }
-
-        if (p.isEighthsRoutine) {
-          metronome.startEighthsTrainingRoutine();
-          document.getElementById('btnTabTrainers').click();
-          return;
-        }
-
         if (p.isSubdivisionsRoutine) {
-          const completedList = getCompletedSubdivisionTempos();
-          const allTempos = [];
-          for (let t = 30; t <= 150; t++) allTempos.push(t);
+          let candidates = [];
+          const completedSet = new Set(getCompletedSubdivisionTempos());
 
-          const uncompleted = allTempos.filter(t => !completedList.includes(t));
-
-          if (uncompleted.length === 0) {
-            alert(`🎉 All 121 tempos (between 30 and 150) have been completed!`);
-            return;
+          for (let bpm = 30; bpm <= 150; bpm++) {
+            if (!completedSet.has(bpm)) {
+              candidates.push(bpm);
+            }
           }
 
-          // Randomly select up to 3 uncompleted tempos with at least 10 BPM gap
-          const selected = [];
-          let candidates = [...uncompleted];
+          if (candidates.length < 3) {
+            alert(`🎉 Congratulations! You have completed almost all tempos (Only ${candidates.length} remaining).\nResetting completed history so you can practice all tempos again!`);
+            localStorage.removeItem('apex_metronome_subdivisions_completed_tempos');
+            candidates = [];
+            for (let bpm = 30; bpm <= 150; bpm++) {
+              candidates.push(bpm);
+            }
+          }
 
-          while (selected.length < 3 && candidates.length > 0) {
+          const selected = [];
+          for (let i = 0; i < 3; i++) {
             const validWithGap = candidates.filter(cand => 
               selected.every(sel => Math.abs(cand - sel) >= 10)
             );
@@ -1146,7 +1232,7 @@
               const chosen = validWithGap[randIdx];
               selected.push(chosen);
               candidates = candidates.filter(cand => cand !== chosen);
-            } else {
+            } else if (candidates.length > 0) {
               const randIdx = Math.floor(Math.random() * candidates.length);
               const chosen = candidates[randIdx];
               selected.push(chosen);
@@ -1154,19 +1240,53 @@
             }
           }
 
-          alert(`🎯 Subdivisions Session Selected Tempos:\n👉 ${selected.join(' BPM, ')} BPM\n\n(30-Second Silence Break between each tempo)\n\nStarting Session...`);
+          const randomBeats = getRandomPresetTimeSignature();
+          metronome.setBeatsPerMeasure(randomBeats);
+          timeSignatureSelect.value = randomBeats;
+          renderBeatGrid();
+
+          alert(`🎯 Subdivisions Session Selected Tempos:\n👉 ${selected.join(' BPM, ')} BPM\n🎲 Random Time Signature: ${randomBeats}/4\n\n(15-Second Silence Break between each tempo)\n\nStarting Session...`);
           metronome.startSubdivisionsRoutine(selected);
           document.getElementById('btnTabTrainers').click();
           return;
         }
 
+        if (p.isEighthsRoutine) {
+          alert("🥁 Starting 8ths Rhythm Training Routine!\n22 Patterns • 4 Bars Per Pattern • Permanent Quarter Note Subdivisions");
+          metronome.startEighthsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
+        if (p.isSixteenthsRoutine) {
+          alert("🥁 Starting 16th Rhythm Training Routine!\n46 Patterns • 4 Bars Per Pattern • Permanent Quarter Note Subdivisions");
+          metronome.startSixteenthsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
+        if (p.isTripletsRoutine) {
+          alert("🥁 Starting 8th Triplet Rhythm Training Routine!\n22 Patterns • 4 Bars Per Pattern • Permanent Quarter Note Subdivisions");
+          metronome.startTripletsTrainingRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
         metronome.subdivisionsRoutineActive = false;
+        metronome.eighthsTrainingRoutineActive = false;
+        metronome.sixteenthsTrainingRoutineActive = false;
+        metronome.tripletsTrainingRoutineActive = false;
+
+        const selectedBeats = (p.id && (p.id.includes('hand') || p.id.includes('leg') || p.id.includes('fingers')))
+          ? getRandomPresetTimeSignature()
+          : p.beats;
+
         metronome.setTempo(p.tempo);
-        metronome.setBeatsPerMeasure(p.beats);
+        metronome.setBeatsPerMeasure(selectedBeats);
         metronome.setSubdivision(p.sub);
         metronome.soundSet = p.sound;
 
-        timeSignatureSelect.value = p.beats;
+        timeSignatureSelect.value = selectedBeats;
         subdivisionSelect.value = p.sub;
         soundSetSelect.value = p.sound;
 
@@ -1174,7 +1294,7 @@
 
         metronome.routineActive = Boolean(p.routineActive);
         metronome.routineMaxRuns = p.routineMaxRuns || 3;
-        metronome.routineBreakSec = p.routineBreakSec || 120;
+        metronome.routineBreakSec = p.routineBreakSec || 60;
         metronome.routineRunCount = 0;
         metronome.inRoutineBreak = false;
 
@@ -1203,8 +1323,16 @@
           metronome.rampStartTempo = p.rampStart || 120;
           metronome.rampTargetTempo = p.rampTarget || 160;
           metronome.rampIncrement = p.rampInc || 10;
-          metronome.rampEveryTimeSec = (p.rampEveryMin || 1) * 60;
-          metronome.rampTotalDurationSec = (p.rampTotalMin || 5) * 60;
+          metronome.rampSchedule = p.rampSchedule || null;
+
+          if (p.rampSchedule && p.rampSchedule.length > 0) {
+            const totalSec = p.rampSchedule.reduce((sum, s) => sum + s.durationSec, 0);
+            metronome.rampTotalDurationSec = totalSec;
+            metronome.rampEveryTimeSec = 0;
+          } else {
+            metronome.rampEveryTimeSec = (p.rampEveryMin || 1) * 60;
+            metronome.rampTotalDurationSec = (p.rampTotalMin || 5) * 60;
+          }
 
           rampModeSelect.value = p.rampMode || 'bars';
           rampStartBpmInput.value = p.rampStart || 120;
@@ -1307,58 +1435,7 @@
 
       renderPresetsUI();
 
-      function resizePendulumCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        canvas.width = Math.round(rect.width * dpr);
-        canvas.height = Math.round(rect.height * dpr);
-      }
-      resizePendulumCanvas();
-      window.addEventListener('resize', resizePendulumCanvas);
 
-      function drawPendulum() {
-        const dpr = window.devicePixelRatio || 1;
-        const width = canvas.width / dpr;
-        const height = canvas.height / dpr;
-
-        ctx.save();
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, width, height);
-
-        const centerX = width / 2;
-        const topY = 20;
-        const length = 160;
-
-        let angle = 0;
-        if (metronome.isPlaying && metronome.audioCtx && !metronome.inRoutineBreak && !metronome.inSubdivisionsBreak && !metronome.isPaused) {
-          const secondsPerBeat = 60.0 / metronome.tempo;
-          const time = metronome.audioCtx.currentTime;
-          angle = Math.sin((time * Math.PI) / secondsPerBeat) * 0.45;
-        }
-
-        const bobX = centerX + Math.sin(angle) * length;
-        const bobY = topY + Math.cos(angle) * length;
-
-        ctx.beginPath();
-        ctx.moveTo(centerX, topY);
-        ctx.lineTo(bobX, bobY);
-        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary');
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(bobX, bobY, 16, 0, Math.PI * 2);
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-secondary');
-        ctx.fill();
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
-
-        ctx.restore();
-        requestAnimationFrame(drawPendulum);
-      }
-      drawPendulum();
 
       document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {

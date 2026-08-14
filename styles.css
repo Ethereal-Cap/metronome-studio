@@ -480,7 +480,7 @@ input[type="range"]::-moz-range-thumb:hover {
   justify-content: center;
   cursor: pointer;
   border: 2px solid transparent;
-  transition: var(--transition);
+  transition: transform 0.04s ease-out, box-shadow 0.04s ease-out, background-color 0.04s ease-out, border-color 0.04s ease-out;
 }
 
 .beat-node .beat-num {
@@ -530,6 +530,7 @@ input[type="range"]::-moz-range-thumb:hover {
   transform: scale(1.15);
   box-shadow: 0 0 18px var(--accent-glow);
   border-color: #fff !important;
+  transition: none !important;
 }
 
 .beat-node[data-state="accent"].active-now {
