@@ -1,0 +1,65 @@
+===============================================================================
+APEX METRONOME STUDIO - VERSION TRACKER & CHANGELOG
+===============================================================================
+
+[Version 1.42] - Backup: E:\music backup\version 1.42 - Pushed to GitHub
+- Added 3 New Advanced Rhythm Preset Routines:
+  - "8th adv rhythm": 256 binary 8th-note patterns pre-packaged into 15 Batches (18 patterns each @ 60 BPM, 4 bars per pattern).
+  - "8th triplet adv rhythm": 4,096 binary 8th-triplet patterns pre-packaged into 228 Batches (18 patterns each @ 60 BPM, 4 bars per pattern).
+  - "16th adv rhythm": 65,536 binary 16th-note patterns pre-packaged into 3,641 Batches (18 patterns each @ 60 BPM, 4 bars per pattern).
+- Genre Priority Initial Batches: Initial batches (Batch 1, Batch 2...) populated with iconic, widely used rhythm patterns from Rock, Heavy Metal, Thrash, Jazz, Blues, Pop, Funk, Reggae/Ska, Latin Claves, Motown, and Power Metal Triplet Gallops.
+- Maximum Variety Interleaving: Subsequent batches structured with density-tier interleaving (balancing 1-note hits, 2-note/3-note grooves, syncopations, and high-density gap tests).
+- Pre-Built Static Datasets: Saved into permanent static files (eighths_adv_batches.js/.json, triplets_adv_batches.js/.json, sixteenths_adv_batches.js/.json).
+- Unified Admin Password to "artisan" across batch completion prompts, Subdivisions logger, and preset deletion modals.
+
+[Version 1.41] - Backup: E:\music backup\version 1.41
+- Added Uniform Sound Mode toggle card below Master Volume bar in right sidebar.
+- Integrated sound engine logic so all normal notes (main beats and subdivisions) play with identical pitch (900 Hz) and respect Normal Beat Volume slider, while preserving Accents (⚡), Weak notes (◦), and Mute (✕) states.
+- Removed mouse scroll-wheel info line below Master Volume slider.
+- Fixed visual node tick synchronization in metronome.js (scheduleNote and schedulePolyNote) by removing early offset delays and aligning DOM highlights 1:1 with audio hardware attack timestamps.
+
+[Version 1.40] - Backup: E:\music backup\version 1.40
+- Added Quarter Note Triplets (1.5x) and Half Note Triplets (0.75x) subdivisions to Subdivision selector.
+- Fixed Accent & Subdivision Grid node generation across all time signatures:
+  - Eliminated extra/unplayed/sustained nodes.
+  - Half Note Triplets (0.75x) in 4/4 renders EXACTLY 3 active nodes ([1], [⅓], [⅔]).
+  - Quarter Note Triplets (1.5x) in 4/4 renders EXACTLY 6 active nodes ([1], [⅔], [⅓], [3], [⅔], [⅓]).
+  - Half Notes (0.5x) in 4/4 renders EXACTLY 2 active nodes ([1], [3]).
+- Created VERSION_TRACKER.txt log file in project directory.
+
+[Version 1.39] - Backup: E:\music backup\version 1.39
+- Relocated Theme Selection dropdown and Information & Manual button from top header to a bottom glass-panel control bar.
+- Unified keyboard shortcut helper badges in the bottom toolbar.
+
+[Version 1.38] - Backup: E:\music backup\version 1.38 - Pushed to GitHub
+- Removed pendulum canvas visualizer (<canvas id="pendulumCanvas">) and animation loop from metronome.html and index.html.
+- Merged completed tempos progress and pushed cleanly to GitHub main branch.
+
+[Version 1.37] - Backup: E:\music backup\version 1.37
+- Added Half Notes (0.5x) subdivision option (1 note played every 2 quarter-note beats).
+- Updated metronome.js audio engine (advanceNote, initSubdivisionGrid, getNoteDisplayLabel) to support floating subdivision values.
+
+[Version 1.36] - Backup: E:\music backup\version 1.36
+- Implemented automatic random time signature selection (2/4 to 17/4, excluding 1/4 and 4/4) whenever Subdivisions, Hand, Leg, or Fingers presets are loaded.
+- Fixed 8th Note Swing duration bug in advanceNote() where 8th note duration was incorrectly doubled.
+
+[Version 1.35] - Backup: E:\music backup\version 1.35
+- Added full time signature options from 2/4 to 17/4.
+- Standardized odd meter pulses (e.g., 7/8 converted to 7/4) to quarter note pulses.
+
+[Version 1.34] - Backup: E:\music backup\version 1.34
+- Added New Descending Training Presets for Leg (135 ➔ 130 for 1:30 each, then 120 ➔ 110 ➔ 100 for 40s each), Hand (160 ➔ 150 for 1:30 each, then 140 ➔ 130 ➔ 120 for 40s each), and Fingers (160 ➔ 150 for 1:30 each, then 140 ➔ 130 ➔ 120 for 40s each).
+
+[Version 1.33] - Backup: E:\music backup\version 1.33
+- Renamed built-in default presets from "Old " prefix to "OG " (e.g. OG Full Hand, OG Full Leg).
+- Added password verification modal protection for deleting user custom presets.
+
+[Version 1.0 - 1.32]
+- Web Audio API lookahead scheduler engine (sub-millisecond precision, 20-300 BPM).
+- Interactive Accent & Subdivision Grid (Accent ⚡, Normal ●, Weak ◦, Mute ✕).
+- Gap / Mute Trainer (Bars Played vs Bars Muted with golden yellow visual mute indicator).
+- Independent Tempo Ramp (Time Mode & Bar Mode).
+- Built-in Intelligent Subdivision Routine with break countdowns and progress tracking.
+- Audio Sample Sets (Woodblock, Stick, Beep, Cowbell, Drumkit, Marimba, Ping-Pong).
+- Polyrhythm generator, Drone synth, Session Timer, and Keyboard Hotkeys.
+===============================================================================

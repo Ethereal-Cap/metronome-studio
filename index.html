@@ -29,19 +29,6 @@
       <span class="brand-icon">⏱️</span>
       <span>Apex Metronome Studio <span style="font-size:0.75rem; color:var(--accent-primary); font-weight:700;">v1.3</span></span>
     </div>
-    <div class="header-actions">
-      <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
-        <label for="themeSelect" style="font-size: 0.8rem;">Theme:</label>
-        <select id="themeSelect" class="custom-select" style="padding: 6px 10px;">
-          <option value="celestial" selected>✨ Celestial Time</option>
-          <option value="studio">Studio Emerald</option>
-          <option value="dark">Dark Cyber</option>
-          <option value="vintage">Vintage Wood</option>
-          <option value="light">Studio Light</option>
-        </select>
-      </div>
-      <button id="btnOpenHelp" class="btn-bump">?</button>
-    </div>
   </header>
 
   <!-- Main Grid Layout -->
@@ -121,7 +108,9 @@
           <label>Subdivision</label>
           <select id="subdivisionSelect" class="custom-select">
             <option value="0.5">Half Notes (0.5x)</option>
+            <option value="0.75">Half Note Triplets (0.75x)</option>
             <option value="1" selected>Quarter Notes (1x)</option>
+            <option value="1.5">Quarter Note Triplets (1.5x)</option>
             <option value="2">Eighth Notes (2x)</option>
             <option value="3">Eighth Triplets (3x)</option>
             <option value="4">Sixteenth Notes (4x)</option>
@@ -278,9 +267,20 @@
           <div class="bpm-slider-container">
             <input type="range" id="volMasterSidebar" min="0" max="100" value="80" style="width: 100%;">
           </div>
-          <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px;">
-            💡 Scroll mouse wheel over volume or tempo slider to adjust!
-          </span>
+        </div>
+
+        <!-- Uniform Sound Mode Toggle -->
+        <div class="tool-card" style="margin-top: 10px;">
+          <div class="toggle-row">
+            <div>
+              <h3><span>🔔</span> Uniform Sound Mode</h3>
+              <div style="font-size: 0.73rem; color: var(--text-muted);">Same sound for normal notes & subdivisions</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="uniformSoundToggle">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
         </div>
 
       </div>
@@ -421,9 +421,24 @@
     </aside>
   </main>
 
-  <!-- Footer Keyboard Helpers -->
-  <footer class="app-footer">
-    <div>Apex Metronome Studio v1.33 • Standalone Offline Web App</div>
+  <!-- Bottom Bar: Theme Selection & Information Controls -->
+  <footer class="app-footer glass-panel" style="margin-top: 20px;">
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+      <div class="control-group" style="flex-direction: row; align-items: center; gap: 10px;">
+        <label for="themeSelect" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Theme:</label>
+        <select id="themeSelect" class="custom-select" style="padding: 6px 14px; font-size: 0.88rem; width: auto;">
+          <option value="celestial" selected>✨ Celestial Time</option>
+          <option value="studio">Studio Emerald</option>
+          <option value="dark">Dark Cyber</option>
+          <option value="vintage">Vintage Wood</option>
+          <option value="light">Studio Light</option>
+        </select>
+      </div>
+      <button id="btnOpenHelp" class="btn-action-lg" style="padding: 6px 18px; font-size: 0.88rem; display: flex; align-items: center; gap: 8px; font-weight: 600; border-radius: var(--radius-md);">
+        <span>ℹ️</span> <span>Information & Manual</span>
+      </button>
+    </div>
+
     <div class="hotkey-list">
       <span><span class="kbd-badge">Space</span> Start/Stop</span>
       <span><span class="kbd-badge">P</span> Pause/Resume</span>
@@ -474,6 +489,9 @@
   </div>
 
   <!-- Attach JavaScript Engine & Controllers -->
+  <script src="eighths_adv_batches.js"></script>
+  <script src="triplets_adv_batches.js"></script>
+  <script src="sixteenths_adv_batches.js"></script>
   <script src="metronome.js?v=1.33"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -631,7 +649,20 @@
       btnTapTempo.addEventListener('click', () => metronome.tap());
 
       function getNoteDisplayLabel(beatIdx, subStep, subdivision) {
-        if (subdivision === 0.5) return (beatIdx % 2 === 0) ? `${beatIdx + 1}` : `½`;
+        if (subdivision === 0.5) return `${beatIdx + 1}`;
+        if (subdivision === 0.75) {
+          if (beatIdx % 4 === 0) return `${beatIdx + 1}`;
+          if (beatIdx % 4 === 1) return `⅓`;
+          if (beatIdx % 4 === 2) return `⅔`;
+          return `${beatIdx + 1}`;
+        }
+        if (subdivision === 1.5) {
+          if (beatIdx % 2 === 0) {
+            return subStep === 0 ? `${beatIdx + 1}` : `⅔`;
+          } else {
+            return `⅓`;
+          }
+        }
         if (subStep === 0) return `${beatIdx + 1}`;
         
         if (subdivision === 2) return `&`;
@@ -659,11 +690,12 @@
         const subs = metronome.subdivision;
 
         for (let b = 0; b < beats; b++) {
-          for (let s = 0; s < subs; s++) {
-            const state = (metronome.subdivisionGrid[b] && metronome.subdivisionGrid[b][s]) ? metronome.subdivisionGrid[b][s] : 'normal';
+          const row = (metronome.subdivisionGrid[b]) ? metronome.subdivisionGrid[b] : [];
+          for (let s = 0; s < row.length; s++) {
+            const state = row[s] || 'normal';
 
             const isMainBeat = (s === 0);
-            node = document.createElement('div');
+            const node = document.createElement('div');
             node.className = `beat-node ${isMainBeat ? 'main-beat-node' : 'subnote-node'} ${s === 0 && subs > 1 ? 'main-beat-start' : ''}`;
             node.setAttribute('data-beat', b);
             node.setAttribute('data-substep', s);
@@ -940,6 +972,24 @@
 
       // Built-in Default Presets Collection
       const BUILTIN_DEFAULT_PRESETS = [
+        {
+          id: "sixteenths_adv_rhythm",
+          name: "16th adv rhythm",
+          isSixteenthsAdvRoutine: true,
+          isBuiltin: true
+        },
+        {
+          id: "triplets_adv_rhythm",
+          name: "8th triplet adv rhythm",
+          isTripletsAdvRoutine: true,
+          isBuiltin: true
+        },
+        {
+          id: "eighths_adv_rhythm",
+          name: "8th adv rhythm",
+          isEighthsAdvRoutine: true,
+          isBuiltin: true
+        },
         {
           id: "sixteenths_rhythm_training",
           name: "16th Rhythm Training",
@@ -1258,6 +1308,27 @@
           return;
         }
 
+        if (p.isSixteenthsAdvRoutine) {
+          alert("🥁 Starting 16th Adv Rhythm Routine!\n3,641 Batches (65,536 16th Patterns) • 4 Bars Per Pattern @ 60 BPM");
+          metronome.startSixteenthsAdvRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
+        if (p.isTripletsAdvRoutine) {
+          alert("🥁 Starting 8th Triplet Adv Rhythm Routine!\n228 Batches (4096 Triplet Patterns) • 4 Bars Per Pattern @ 60 BPM");
+          metronome.startTripletsAdvRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
+        if (p.isEighthsAdvRoutine) {
+          alert("🥁 Starting 8th Adv Rhythm Routine!\n15 Batches (256 Patterns) • 4 Bars Per Pattern @ 60 BPM");
+          metronome.startEighthsAdvRoutine();
+          document.getElementById('btnTabTrainers').click();
+          return;
+        }
+
         if (p.isSixteenthsRoutine) {
           alert("🥁 Starting 16th Rhythm Training Routine!\n46 Patterns • 4 Bars Per Pattern • Permanent Quarter Note Subdivisions");
           metronome.startSixteenthsTrainingRoutine();
@@ -1364,7 +1435,16 @@
           let descText = `${p.tempo || 120} BPM • ${p.beats || 4}/4 • ${p.sound || 'woodblock'}`;
           let nameText = p.name;
 
-          if (p.isSixteenthsRoutine) {
+          if (p.isSixteenthsAdvRoutine) {
+            const completedBatches = metronome.getCompletedSixteenthsAdvBatches ? metronome.getCompletedSixteenthsAdvBatches().length : 0;
+            descText = `Advanced Routine • ${completedBatches}/3,641 Batches Completed (65,536 16th Patterns @ 60 BPM)`;
+          } else if (p.isTripletsAdvRoutine) {
+            const completedBatches = metronome.getCompletedTripletsAdvBatches ? metronome.getCompletedTripletsAdvBatches().length : 0;
+            descText = `Advanced Routine • ${completedBatches}/228 Batches Completed (4096 Triplet Patterns @ 60 BPM)`;
+          } else if (p.isEighthsAdvRoutine) {
+            const completedBatches = metronome.getCompletedEighthsAdvBatches ? metronome.getCompletedEighthsAdvBatches().length : 0;
+            descText = `Advanced Routine • ${completedBatches}/15 Batches Completed (256 Patterns @ 60 BPM)`;
+          } else if (p.isSixteenthsRoutine) {
             descText = `Interactive Training • 35 Patterns (4 Bars Each, 140 Bars Total)`;
           } else if (p.isTripletsRoutine) {
             descText = `Interactive Training • 22 Patterns (4 Bars Each, 88 Bars Total)`;
@@ -1501,6 +1581,10 @@
         document.getElementById('valSwing').textContent = `${swingSlider.value}%`;
       });
 
+      document.getElementById('uniformSoundToggle').addEventListener('change', (e) => {
+        metronome.uniformSoundEnabled = e.target.checked;
+      });
+
       document.getElementById('gapTrainerToggle').addEventListener('change', (e) => {
         metronome.gapTrainerEnabled = e.target.checked;
         metronome.checkGapMuteState();
@@ -1559,6 +1643,57 @@
         } else if (e.code === 'KeyM') {
           syncMasterVolumeUI(volMasterSidebar.value > 0 ? 0 : 80);
         }
+      });
+
+      window.addEventListener('sixteenths-adv-training-update', (e) => {
+        const { batchIdx, totalBatches, stepIdx, totalSteps, patternName, barInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `16th Adv Rhythm • Batch ${batchIdx}/${totalBatches} • Pattern ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
+      window.addEventListener('sixteenths-adv-batch-completed', () => {
+        renderPresetsUI();
+        updateMainStatusBar(1, false);
+      });
+
+      window.addEventListener('triplets-adv-training-update', (e) => {
+        const { batchIdx, totalBatches, stepIdx, totalSteps, patternName, barInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `8th Triplet Adv Rhythm • Batch ${batchIdx}/${totalBatches} • Pattern ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
+      window.addEventListener('triplets-adv-batch-completed', () => {
+        renderPresetsUI();
+        updateMainStatusBar(1, false);
+      });
+
+      window.addEventListener('eighths-adv-training-update', (e) => {
+        const { batchIdx, totalBatches, stepIdx, totalSteps, patternName, barInStep } = e.detail;
+
+        timeSignatureSelect.value = metronome.beatsPerMeasure;
+        subdivisionSelect.value = metronome.subdivision;
+        renderBeatGrid();
+
+        updateMainStatusBar(barInStep, false);
+        mainSessionTimerDisplay.textContent = `8th Adv Rhythm • Batch ${batchIdx}/${totalBatches} • Pattern ${stepIdx}/${totalSteps}: "${patternName}"`;
+        mainSessionTimerDisplay.style.color = 'var(--accent-primary)';
+      });
+
+      window.addEventListener('eighths-adv-batch-completed', () => {
+        renderPresetsUI();
+        updateMainStatusBar(1, false);
       });
 
       window.addEventListener('eighths-training-update', (e) => {
@@ -1652,6 +1787,9 @@
         if (themeSelect) themeSelect.value = "celestial";
         document.documentElement.setAttribute('data-theme', 'celestial');
 
+        document.getElementById('uniformSoundToggle').checked = false;
+        metronome.uniformSoundEnabled = false;
+
         document.getElementById('gapTrainerToggle').checked = false;
         document.getElementById('barsPlayedInput').value = 2;
         document.getElementById('barsMutedInput').value = 3;
@@ -1733,7 +1871,7 @@
 
       function submitPassword() {
         if (!pendingPasswordAction) return;
-        if (inputAdminPassword.value === "ArtisanOfGore") {
+        if (inputAdminPassword.value === "artisan") {
           const action = pendingPasswordAction;
           closePasswordModal();
           action();

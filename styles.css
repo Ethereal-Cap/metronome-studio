@@ -779,18 +779,22 @@ input:checked + .slider-toggle:before {
   text-align: right;
 }
 
-/* Footer & Help Modal */
+/* Footer & Controls Bar */
 .app-footer {
-  margin-top: auto;
-  padding: 20px;
-  text-align: center;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  max-width: 1320px;
+  width: 94%;
+  margin: 20px auto 28px auto;
+  padding: 16px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   font-size: 0.85rem;
   color: var(--text-muted);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .hotkey-list {

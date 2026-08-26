@@ -16,6 +16,7 @@ class MetronomeEngine {
     this.subdivision = 1; // 1=Quarter, 2=Eighth, 3=Triplet, 4=16th, 5=Quintuplet, 6=Sextuplet, 7=Septuplet, 8=32nd
     this.swing = 50;
     this.soundSet = 'woodblock';
+    this.uniformSoundEnabled = false;
 
     // Volumes (0 - 1)
     this.masterVolume = 0.8;
@@ -148,23 +149,23 @@ class MetronomeEngine {
     const oldGrid = keepExisting ? this.subdivisionGrid : [];
     this.subdivisionGrid = [];
 
-    const numSubSteps = Math.max(1, Math.round(this.subdivision));
-
     for (let b = 0; b < this.beatsPerMeasure; b++) {
       const beatRow = [];
+      let numSubSteps = Math.max(1, Math.round(this.subdivision));
+
+      if (this.subdivision === 0.5) {
+        numSubSteps = (b % 2 === 0) ? 1 : 0;
+      } else if (this.subdivision === 0.75) {
+        numSubSteps = (b % 4 === 3) ? 0 : 1;
+      } else if (this.subdivision === 1.5) {
+        numSubSteps = (b % 2 === 0) ? 2 : 1;
+      }
+
       for (let s = 0; s < numSubSteps; s++) {
         if (oldGrid[b] && oldGrid[b][s] !== undefined) {
           beatRow.push(oldGrid[b][s]);
         } else {
-          if (s === 0) {
-            if (this.subdivision === 0.5) {
-              beatRow.push(b % 2 === 0 ? (b === 0 ? 'accent' : 'normal') : 'mute');
-            } else {
-              beatRow.push(b === 0 ? 'accent' : 'normal');
-            }
-          } else {
-            beatRow.push('normal');
-          }
+          beatRow.push((b === 0 && s === 0) ? 'accent' : 'normal');
         }
       }
       this.subdivisionGrid.push(beatRow);
@@ -304,6 +305,9 @@ class MetronomeEngine {
     this.inSubdivisionsBreak = false;
     this.subdivisionsRoutineActive = false;
     this.eighthsTrainingRoutineActive = false;
+    this.eighthsAdvRoutineActive = false;
+    this.tripletsAdvRoutineActive = false;
+    this.sixteenthsAdvRoutineActive = false;
     this.sixteenthsTrainingRoutineActive = false;
     this.tripletsTrainingRoutineActive = false;
     this.tempoChangeUnmuteBarsRemaining = 0;
@@ -364,8 +368,9 @@ class MetronomeEngine {
   advanceNote() {
     const secondsPerBeat = 60.0 / this.tempo;
     
-    const effSubdivision = (this.inCountIn || this.subdivision < 1) ? 1 : this.subdivision;
+    const effSubdivision = this.inCountIn ? 1 : this.subdivision;
     let stepDuration = secondsPerBeat / effSubdivision;
+
     if (!this.inCountIn && this.subdivision === 2) {
       const swingRatio = this.swing / 100.0;
       if (this.currentSubdivisionStep % 2 === 0) {
@@ -377,15 +382,50 @@ class MetronomeEngine {
 
     this.nextNoteTime += stepDuration;
 
-    this.currentSubdivisionStep++;
-    if (this.currentSubdivisionStep >= effSubdivision) {
+    if (this.inCountIn) {
+      this.currentSubdivisionStep++;
+      if (this.currentSubdivisionStep >= 1) {
+        this.currentSubdivisionStep = 0;
+        this.currentBeatInMeasure++;
+        if (this.currentBeatInMeasure >= this.beatsPerMeasure) {
+          this.currentBeatInMeasure = 0;
+          this.onMeasureComplete();
+        }
+      }
+      return;
+    }
+
+    if (this.subdivision === 1.5) {
+      this.currentSubdivisionStep++;
+      if (this.currentBeatInMeasure % 2 === 0) {
+        if (this.currentSubdivisionStep >= 2) {
+          this.currentSubdivisionStep = 0;
+          this.currentBeatInMeasure++;
+        }
+      } else {
+        this.currentSubdivisionStep = 0;
+        this.currentBeatInMeasure++;
+      }
+    } else if (this.subdivision === 0.75) {
       this.currentSubdivisionStep = 0;
       this.currentBeatInMeasure++;
-
-      if (this.currentBeatInMeasure >= this.beatsPerMeasure) {
-        this.currentBeatInMeasure = 0;
-        this.onMeasureComplete();
+      if (this.currentBeatInMeasure % 4 === 3) {
+        this.currentBeatInMeasure = (this.currentBeatInMeasure + 1) % this.beatsPerMeasure;
       }
+    } else if (this.subdivision === 0.5) {
+      this.currentSubdivisionStep = 0;
+      this.currentBeatInMeasure += 2;
+    } else {
+      this.currentSubdivisionStep++;
+      if (this.currentSubdivisionStep >= effSubdivision) {
+        this.currentSubdivisionStep = 0;
+        this.currentBeatInMeasure++;
+      }
+    }
+
+    if (this.currentBeatInMeasure >= this.beatsPerMeasure) {
+      this.currentBeatInMeasure = this.currentBeatInMeasure % this.beatsPerMeasure;
+      this.onMeasureComplete();
     }
   }
 
@@ -444,10 +484,16 @@ class MetronomeEngine {
 
     this.checkGapMuteState();
 
-    if (this.tripletsTrainingRoutineActive) {
+    if (this.sixteenthsAdvRoutineActive) {
+      this.advanceSixteenthsAdvRoutine();
+    } else if (this.tripletsAdvRoutineActive) {
+      this.advanceTripletsAdvRoutine();
+    } else if (this.tripletsTrainingRoutineActive) {
       this.advanceTripletsTrainingRoutine();
     } else if (this.sixteenthsTrainingRoutineActive) {
       this.advanceSixteenthsTrainingRoutine();
+    } else if (this.eighthsAdvRoutineActive) {
+      this.advanceEighthsAdvRoutine();
     } else if (this.eighthsTrainingRoutineActive) {
       this.advanceEighthsTrainingRoutine();
     } else if (this.subdivisionsRoutineActive) {
@@ -656,13 +702,425 @@ class MetronomeEngine {
             }
           }));
           break;
-        } else if (enteredPwd === "ArtisanOfGore") {
+        } else if (enteredPwd === "artisan") {
           alert("✅ Admin Verified! 3 Tempos successfully saved.");
           window.dispatchEvent(new CustomEvent('subdivisions-routine-finished', {
             detail: {
               completedTempos: this.subdivisionsTempos,
               verified: true
             }
+          }));
+          break;
+        } else {
+          promptMsg = "❌ WRONG PASSWORD! Please try again.\n🔒 Enter Admin Password (or click Cancel to skip):";
+        }
+      }
+    }, 100);
+  }
+
+  // --- 8th Adv Rhythm Preset Routine Logic (256 Shuffled Variations in 15 Batches) ---
+  getEighthsAdvBatchPatterns(batchIdx) {
+    if (typeof EIGHTHS_ADV_PREBUILT_BATCHES !== 'undefined' && EIGHTHS_ADV_PREBUILT_BATCHES[batchIdx]) {
+      return EIGHTHS_ADV_PREBUILT_BATCHES[batchIdx].patterns;
+    }
+    const allPatterns = this.generateShuffled256EighthPatterns();
+    const batchSize = 18;
+    const startIdx = batchIdx * batchSize;
+    return allPatterns.slice(startIdx, startIdx + batchSize);
+  }
+
+  generateShuffled256EighthPatterns() {
+    const list = [];
+    const beatLabels = ['1', '2', '3', '4'];
+    for (let i = 0; i < 256; i++) {
+      const bits = i.toString(2).padStart(8, '0');
+      const grid = [];
+      const names = [];
+      for (let b = 0; b < 4; b++) {
+        const p1Val = bits[b * 2];
+        const p2Val = bits[b * 2 + 1];
+
+        const b1 = p1Val === '1' ? (b === 0 ? 'accent' : 'normal') : 'mute';
+        const b2 = p2Val === '1' ? 'normal' : 'mute';
+        grid.push([b1, b2]);
+
+        const label1 = p1Val === '1' ? beatLabels[b] : '_';
+        const label2 = p2Val === '1' ? '&' : '_';
+        names.push(`${label1}${label2}`);
+      }
+      list.push({
+        id: i + 1,
+        grid: grid,
+        name: names.join(' ')
+      });
+    }
+
+    // Deterministic Seeded Shuffle so pattern order is 100% consistent
+    let seed = 123456789;
+    function random() {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    }
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+
+    return list;
+  }
+
+  getCompletedEighthsAdvBatches() {
+    try {
+      const stored = localStorage.getItem('apex_metronome_8th_adv_completed_batches');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  startEighthsAdvRoutine() {
+    this.stop();
+    this.eighthsAdvRoutineActive = true;
+    this.subdivisionsRoutineActive = false;
+    this.eighthsTrainingRoutineActive = false;
+    this.sixteenthsTrainingRoutineActive = false;
+    this.tripletsTrainingRoutineActive = false;
+
+    const completed = this.getCompletedEighthsAdvBatches();
+    let targetBatchIdx = 0;
+    for (let b = 0; b < 15; b++) {
+      if (!completed.includes(b + 1)) {
+        targetBatchIdx = b;
+        break;
+      }
+    }
+
+    this.eighthsAdvBatchPatterns = this.getEighthsAdvBatchPatterns(targetBatchIdx);
+
+    this.eighthsAdvCurrentBatchIdx = targetBatchIdx;
+    this.eighthsAdvCurrentStepIdx = 0;
+    this.eighthsAdvBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    this.beatsPerMeasure = 4;
+    this.subdivision = 2;
+    this.tempo = 60;
+
+    this.applyEighthsAdvStepState();
+    this.start();
+  }
+
+  applyEighthsAdvStepState() {
+    const current = this.eighthsAdvBatchPatterns[this.eighthsAdvCurrentStepIdx];
+    if (!current) return;
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(current.grid));
+
+    window.dispatchEvent(new CustomEvent('eighths-adv-training-update', {
+      detail: {
+        batchIdx: this.eighthsAdvCurrentBatchIdx + 1,
+        totalBatches: 15,
+        stepIdx: this.eighthsAdvCurrentStepIdx + 1,
+        totalSteps: this.eighthsAdvBatchPatterns.length,
+        patternName: current.name,
+        barInStep: this.eighthsAdvBarInStep,
+        totalBarsInStep: 4
+      }
+    }));
+  }
+
+  advanceEighthsAdvRoutine() {
+    this.eighthsAdvBarInStep++;
+
+    if (this.eighthsAdvBarInStep > 4) {
+      this.eighthsAdvBarInStep = 1;
+      this.eighthsAdvCurrentStepIdx++;
+
+      if (this.eighthsAdvCurrentStepIdx >= this.eighthsAdvBatchPatterns.length) {
+        this.onEighthsAdvRoutineComplete();
+        return;
+      }
+    }
+
+    this.applyEighthsAdvStepState();
+  }
+
+  onEighthsAdvRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+
+    const batchNum = this.eighthsAdvCurrentBatchIdx + 1;
+    setTimeout(() => {
+      let promptMsg = `🎉 Batch ${batchNum}/15 Complete!\n🔒 Enter Admin Password to log Batch ${batchNum} as completed:`;
+      while (true) {
+        const enteredPwd = prompt(promptMsg);
+        if (enteredPwd === null) {
+          alert(`⚠️ Cancelled. Batch ${batchNum} was NOT marked as completed.`);
+          break;
+        } else if (enteredPwd === "artisan") {
+          const currentCompleted = this.getCompletedEighthsAdvBatches();
+          let updated = Array.from(new Set([...currentCompleted, batchNum]));
+
+          if (updated.length >= 15) {
+            alert("🏆 CONGRATULATIONS! You completed all 15 Batches (256 Patterns)!\nResetting progress back to Batch 1 for your next session!");
+            updated = [];
+          } else {
+            alert(`✅ Admin Verified! Batch ${batchNum}/15 logged as completed.`);
+          }
+
+          localStorage.setItem('apex_metronome_8th_adv_completed_batches', JSON.stringify(updated));
+          window.dispatchEvent(new CustomEvent('eighths-adv-batch-completed', {
+            detail: { completedBatches: updated }
+          }));
+          break;
+        } else {
+          promptMsg = "❌ WRONG PASSWORD! Please try again.\n🔒 Enter Admin Password (or click Cancel to skip):";
+        }
+      }
+    }, 100);
+  }
+
+  // --- 8th Triplet Adv Rhythm Preset Routine Logic (4096 Variations in 228 Batches) ---
+  getTripletsAdvBatchPatterns(batchIdx) {
+    if (typeof TRIPLETS_ADV_PREBUILT_BATCHES !== 'undefined' && TRIPLETS_ADV_PREBUILT_BATCHES[batchIdx]) {
+      return TRIPLETS_ADV_PREBUILT_BATCHES[batchIdx].patterns;
+    }
+    return [];
+  }
+
+  getCompletedTripletsAdvBatches() {
+    try {
+      const stored = localStorage.getItem('apex_metronome_triplets_adv_completed_batches');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  startTripletsAdvRoutine() {
+    this.stop();
+    this.tripletsAdvRoutineActive = true;
+    this.eighthsAdvRoutineActive = false;
+    this.subdivisionsRoutineActive = false;
+    this.eighthsTrainingRoutineActive = false;
+    this.sixteenthsTrainingRoutineActive = false;
+    this.tripletsTrainingRoutineActive = false;
+
+    const completed = this.getCompletedTripletsAdvBatches();
+    let targetBatchIdx = 0;
+    for (let b = 0; b < 228; b++) {
+      if (!completed.includes(b + 1)) {
+        targetBatchIdx = b;
+        break;
+      }
+    }
+
+    this.tripletsAdvBatchPatterns = this.getTripletsAdvBatchPatterns(targetBatchIdx);
+
+    this.tripletsAdvCurrentBatchIdx = targetBatchIdx;
+    this.tripletsAdvCurrentStepIdx = 0;
+    this.tripletsAdvBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    this.beatsPerMeasure = 4;
+    this.subdivision = 3;
+    this.tempo = 60;
+
+    this.applyTripletsAdvStepState();
+    this.start();
+  }
+
+  applyTripletsAdvStepState() {
+    const current = this.tripletsAdvBatchPatterns[this.tripletsAdvCurrentStepIdx];
+    if (!current) return;
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(current.grid));
+
+    window.dispatchEvent(new CustomEvent('triplets-adv-training-update', {
+      detail: {
+        batchIdx: this.tripletsAdvCurrentBatchIdx + 1,
+        totalBatches: 228,
+        stepIdx: this.tripletsAdvCurrentStepIdx + 1,
+        totalSteps: this.tripletsAdvBatchPatterns.length,
+        patternName: current.name,
+        barInStep: this.tripletsAdvBarInStep,
+        totalBarsInStep: 4
+      }
+    }));
+  }
+
+  advanceTripletsAdvRoutine() {
+    this.tripletsAdvBarInStep++;
+
+    if (this.tripletsAdvBarInStep > 4) {
+      this.tripletsAdvBarInStep = 1;
+      this.tripletsAdvCurrentStepIdx++;
+
+      if (this.tripletsAdvCurrentStepIdx >= this.tripletsAdvBatchPatterns.length) {
+        this.onTripletsAdvRoutineComplete();
+        return;
+      }
+    }
+
+    this.applyTripletsAdvStepState();
+  }
+
+  onTripletsAdvRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+
+    const batchNum = this.tripletsAdvCurrentBatchIdx + 1;
+    setTimeout(() => {
+      let promptMsg = `🎉 Batch ${batchNum}/228 Complete!\n🔒 Enter Admin Password to log Batch ${batchNum} as completed:`;
+      while (true) {
+        const enteredPwd = prompt(promptMsg);
+        if (enteredPwd === null) {
+          alert(`⚠️ Cancelled. Batch ${batchNum} was NOT marked as completed.`);
+          break;
+        } else if (enteredPwd === "artisan") {
+          const currentCompleted = this.getCompletedTripletsAdvBatches();
+          let updated = Array.from(new Set([...currentCompleted, batchNum]));
+
+          if (updated.length >= 228) {
+            alert("🏆 CONGRATULATIONS! You completed all 228 Batches (4096 Triplet Patterns)!\nResetting progress back to Batch 1 for your next cycle!");
+            updated = [];
+          } else {
+            alert(`✅ Admin Verified! Batch ${batchNum}/228 logged as completed.`);
+          }
+
+          localStorage.setItem('apex_metronome_triplets_adv_completed_batches', JSON.stringify(updated));
+          window.dispatchEvent(new CustomEvent('triplets-adv-batch-completed', {
+            detail: { completedBatches: updated }
+          }));
+          break;
+        } else {
+          promptMsg = "❌ WRONG PASSWORD! Please try again.\n🔒 Enter Admin Password (or click Cancel to skip):";
+        }
+      }
+    }, 100);
+  }
+
+  // --- 16th Adv Rhythm Preset Routine Logic (65,536 Variations in 3,641 Batches) ---
+  getSixteenthsAdvBatchPatterns(batchIdx) {
+    if (typeof SIXTEENTHS_ADV_PREBUILT_BATCHES !== 'undefined' && SIXTEENTHS_ADV_PREBUILT_BATCHES[batchIdx]) {
+      return SIXTEENTHS_ADV_PREBUILT_BATCHES[batchIdx].patterns;
+    }
+    return [];
+  }
+
+  getCompletedSixteenthsAdvBatches() {
+    try {
+      const stored = localStorage.getItem('apex_metronome_sixteenths_adv_completed_batches');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  startSixteenthsAdvRoutine() {
+    this.stop();
+    this.sixteenthsAdvRoutineActive = true;
+    this.tripletsAdvRoutineActive = false;
+    this.eighthsAdvRoutineActive = false;
+    this.subdivisionsRoutineActive = false;
+    this.eighthsTrainingRoutineActive = false;
+    this.sixteenthsTrainingRoutineActive = false;
+    this.tripletsTrainingRoutineActive = false;
+
+    const completed = this.getCompletedSixteenthsAdvBatches();
+    let targetBatchIdx = 0;
+    for (let b = 0; b < 3641; b++) {
+      if (!completed.includes(b + 1)) {
+        targetBatchIdx = b;
+        break;
+      }
+    }
+
+    this.sixteenthsAdvBatchPatterns = this.getSixteenthsAdvBatchPatterns(targetBatchIdx);
+
+    this.sixteenthsAdvCurrentBatchIdx = targetBatchIdx;
+    this.sixteenthsAdvCurrentStepIdx = 0;
+    this.sixteenthsAdvBarInStep = 1;
+    this.gapTrainerEnabled = false;
+    this.tempoRampEnabled = false;
+
+    this.beatsPerMeasure = 4;
+    this.subdivision = 4;
+    this.tempo = 60;
+
+    this.applySixteenthsAdvStepState();
+    this.start();
+  }
+
+  applySixteenthsAdvStepState() {
+    const current = this.sixteenthsAdvBatchPatterns[this.sixteenthsAdvCurrentStepIdx];
+    if (!current) return;
+
+    this.subdivisionGrid = JSON.parse(JSON.stringify(current.grid));
+
+    window.dispatchEvent(new CustomEvent('sixteenths-adv-training-update', {
+      detail: {
+        batchIdx: this.sixteenthsAdvCurrentBatchIdx + 1,
+        totalBatches: 3641,
+        stepIdx: this.sixteenthsAdvCurrentStepIdx + 1,
+        totalSteps: this.sixteenthsAdvBatchPatterns.length,
+        patternName: current.name,
+        barInStep: this.sixteenthsAdvBarInStep,
+        totalBarsInStep: 4
+      }
+    }));
+  }
+
+  advanceSixteenthsAdvRoutine() {
+    this.sixteenthsAdvBarInStep++;
+
+    if (this.sixteenthsAdvBarInStep > 4) {
+      this.sixteenthsAdvBarInStep = 1;
+      this.sixteenthsAdvCurrentStepIdx++;
+
+      if (this.sixteenthsAdvCurrentStepIdx >= this.sixteenthsAdvBatchPatterns.length) {
+        this.onSixteenthsAdvRoutineComplete();
+        return;
+      }
+    }
+
+    this.applySixteenthsAdvStepState();
+  }
+
+  onSixteenthsAdvRoutineComplete() {
+    this.stop();
+    this.playSessionEndChime();
+
+    const batchNum = this.sixteenthsAdvCurrentBatchIdx + 1;
+    setTimeout(() => {
+      let promptMsg = `🎉 Batch ${batchNum}/3641 Complete!\n🔒 Enter Admin Password to log Batch ${batchNum} as completed:`;
+      while (true) {
+        const enteredPwd = prompt(promptMsg);
+        if (enteredPwd === null) {
+          alert(`⚠️ Cancelled. Batch ${batchNum} was NOT marked as completed.`);
+          break;
+        } else if (enteredPwd === "artisan") {
+          const currentCompleted = this.getCompletedSixteenthsAdvBatches();
+          let updated = Array.from(new Set([...currentCompleted, batchNum]));
+
+          if (updated.length >= 3641) {
+            alert("🏆 CONGRATULATIONS! You completed all 3,641 Batches (65,536 16th Patterns)!\nResetting progress back to Batch 1 for your next cycle!");
+            updated = [];
+          } else {
+            alert(`✅ Admin Verified! Batch ${batchNum}/3641 logged as completed.`);
+          }
+
+          localStorage.setItem('apex_metronome_sixteenths_adv_completed_batches', JSON.stringify(updated));
+          window.dispatchEvent(new CustomEvent('sixteenths-adv-batch-completed', {
+            detail: { completedBatches: updated }
           }));
           break;
         } else {
@@ -1225,12 +1683,10 @@ class MetronomeEngine {
     };
 
     const delayMs = (time - this.audioCtx.currentTime) * 1000;
-    if (delayMs <= 12) {
-      requestAnimationFrame(dispatchTick);
+    if (delayMs <= 0) {
+      dispatchTick();
     } else {
-      setTimeout(() => {
-        requestAnimationFrame(dispatchTick);
-      }, Math.max(0, delayMs - 12));
+      setTimeout(dispatchTick, Math.max(0, Math.round(delayMs)));
     }
 
     if (this.inCountIn) {
@@ -1255,11 +1711,17 @@ class MetronomeEngine {
       freq = 450;
       noteVol = this.subVolume * 0.7;
     } else {
-      freq = isMainBeat ? 900 : 600;
-      noteVol = isMainBeat ? this.beatVolume : this.subVolume;
+      if (this.uniformSoundEnabled) {
+        freq = 900;
+        noteVol = this.beatVolume;
+      } else {
+        freq = isMainBeat ? 900 : 600;
+        noteVol = isMainBeat ? this.beatVolume : this.subVolume;
+      }
     }
 
-    this.playSyntheticTone(freq, time, noteVol, isMainBeat);
+    const effIsMainBeat = (this.uniformSoundEnabled && subState === 'normal') ? true : isMainBeat;
+    this.playSyntheticTone(freq, time, noteVol, effIsMainBeat);
   }
 
   isLastBarOfSession() {
@@ -1366,12 +1828,10 @@ class MetronomeEngine {
     };
 
     const delayMs = (time - this.audioCtx.currentTime) * 1000;
-    if (delayMs <= 8) {
-      requestAnimationFrame(dispatchPolyTick);
+    if (delayMs <= 0) {
+      dispatchPolyTick();
     } else {
-      setTimeout(() => {
-        requestAnimationFrame(dispatchPolyTick);
-      }, delayMs - 8);
+      setTimeout(dispatchPolyTick, Math.max(0, Math.round(delayMs)));
     }
 
     this.playPolyTone(1050, time, this.polyVolume);
